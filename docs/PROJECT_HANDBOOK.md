@@ -42,20 +42,27 @@
 ```text
 F:\jobhunt-ops\
 ├── index.html                  # 入口 HTML（zh-CN，标题"求职作战台 · 2026 秋招"）
-├── package.json                # 脚本：dev / dev:full / ai:proxy / build / preview / verify
-├── vite.config.ts              # host=127.0.0.1, port=8788, proxy /api/ai → 127.0.0.1:8787, base="./"
+├── package.json                # 脚本：dev / dev:full / ai:proxy / build / build:demo / deploy / preview / verify*
+├── vite.config.ts              # host=127.0.0.1, port=8788, proxy /api/ai → 127.0.0.1:8787, base="./", __DEMO_MODE__ define, firebase manualChunks
 ├── tsconfig.json / app / node  # TS 严格模式工程引用
-├── .env.example                # DEEPSEEK_* 环境变量模板（复制为 .env 填密钥）
-├── .gitignore                  # 含 .env / .env.*.local（密钥绝不入库）
+├── .env.example                # DEEPSEEK_* 本地密钥模板 + VITE_FIREBASE_* 公网配置模板
+├── .gitignore                  # 含 .env / .env.*.local / functions/node_modules / .firebase（密钥绝不入库）
+├── firebase.json               # Firebase Hosting（SPA 回退）+ Firestore 规则 + Functions 配置
+├── firestore.rules             # ★ 只允许用户读写自己的 states/{uid}
+├── .firebaserc.example         # Firebase 项目 ID 模板（复制为 .firebaserc 或 firebase use --add）
 ├── README.md                   # 对外说明（含本手册链接）
 ├── docs/
 │   ├── PROJECT_HANDBOOK.md     # ★ 本文档
-│   └── DEPLOY.md               # ★ 公网展示版部署指南（第一阶段，见 §13）
+│   ├── DEPLOY.md               # ★ 公网展示版部署指南（第一阶段，见 §13）
+│   └── FIREBASE_SETUP.md       # ★ 第二阶段云端化上线指南（见 §14）
 ├── server/
-│   └── deepseek-proxy.mjs      # ★ DeepSeek 本地安全代理（密钥只在此侧）
+│   └── deepseek-proxy.mjs      # ★ DeepSeek 本地安全代理（密钥只在此侧，开发用）
+├── functions/                  # ★ Firebase 云函数（第二阶段，见 §14）
+│   ├── package.json            # firebase-functions / firebase-admin，node 20
+│   └── index.js                # ★ deepseekProxy / deepseekStatus（密钥=云端 secret）
 ├── scripts/
 │   ├── dev-full.mjs            # 一条命令：AI 代理 + Vite（透传 vite 参数）
-│   ├── verify-ai.mjs           # ★ AI 安全门禁（17 项字符串检查，见 §7.5）
+│   ├── verify-ai.mjs           # ★ AI 安全门禁（26 项字符串检查，见 §7.5 / §14.4）
 │   └── verify-seed.mjs         # ★ 种子数据隔离门禁（真实/演示包互不含对方数据，见 §13.2）
 ├── public/
 │   └── _redirects              # SPA 路由回退（Netlify / Cloudflare Pages）
@@ -65,7 +72,8 @@ F:\jobhunt-ops\
     │   ├── App.tsx             # AppDataProvider + AppShell + Outlet
     │   └── router.tsx          # 9 条路由（见 §6）
     ├── components/
-    │   ├── layout/AppShell.tsx # 侧边栏(9项) + 顶栏 + 当前周徽章
+    │   ├── layout/AppShell.tsx # 侧边栏(9项) + 顶栏（含账号组件）+ 当前周徽章
+    │   ├── auth/AuthWidget.tsx # ★ 登录/注册弹窗 + 同步状态 + 上传本机数据（见 §14）
     │   └── ai/AIWorkspace.tsx  # ★ AI 助手（能力/上下文授权/草稿确认）
     ├── pages/                  # 9 个页面（见 §6）
     │   ├── OverviewPage.tsx
@@ -79,18 +87,20 @@ F:\jobhunt-ops\
     │   └── DataPage.tsx
     ├── data/seed.ts            # ★ 种子数据（真实初始清单；零顶层副作用，见 §13.2）
     ├── data/demoSeed.ts        # ★ 公网展示版演示数据（虚构，零顶层副作用）
-    ├── store/appStore.tsx      # ★ 状态 + localStorage 持久化 + 派生工具
-    ├── services/ai/            # ★ AI 服务层（见 §7）
-    │   ├── index.ts            # createAIService 工厂
-    │   ├── context.ts          # buildAIContextSummary
-    │   ├── MockAdapter.ts      # 本地规则（不联网）
-    │   └── DeepSeekAdapter.ts  # 只调本地代理 + 响应校验
+    ├── store/appStore.tsx      # ★ 状态 + localStorage 持久化 + 云同步（Firestore）+ 派生工具（见 §14）
+    ├── services/
+    │   ├── firebase.ts         # ★ Firebase 初始化/认证/错误映射（__DEMO_MODE__ 时整模块禁用）
+    │   └── ai/                 # ★ AI 服务层（见 §7）
+    │       ├── index.ts        # createAIService 工厂
+    │       ├── context.ts      # buildAIContextSummary
+    │       ├── MockAdapter.ts  # 本地规则（不联网）
+    │       └── DeepSeekAdapter.ts  # 开发走本地代理 / 生产走云函数 + 响应校验
     ├── types/
     │   ├── domain.ts           # ★ 数据契约（见 §4）
     │   └── ai.ts               # AI 契约（见 §7）
-    ├── utils/io.ts             # 下载/CSV/备份校验
+    ├── utils/io.ts             # 下载/CSV/备份校验/isAppState
     ├── utils/questionBank.ts   # 面试题库汇总（拆分/规范化去重/频率排序/Markdown 生成）
-    └── styles/globals.css      # 全部样式（含 AI 工作区、数据管理页、面试题库）
+    └── styles/globals.css      # 全部样式（含 AI 工作区、数据管理页、面试题库、账号组件）
 ```
 
 ---
@@ -240,16 +250,19 @@ AIWorkspace（选提供商 → 选能力 → 勾选上下文/复盘对象 → �
 
 ```bash
 npm install          # 安装依赖（锁文件 package-lock.json）
-npm run dev          # 仅前端 → http://127.0.0.1:8788
-npm run dev:full     # ★ 推荐：AI 代理(8787) + 前端(8788) 一条命令
+npm run dev          # 仅前端 → http://127.0.0.1:8788（未配置 Firebase 时=本地模式）
+npm run dev:full     # ★ 本地推荐：AI 代理(8787) + 前端(8788) 一条命令
 npm run dev:full -- --port 8789   # 换端口（dev-full 透传 vite 参数）
 npm run ai:proxy     # 只起代理
-npm run build        # 真实版：tsc -b（严格检查） + vite build → dist/（真实种子数据）
-npm run build:demo   # ★ 公网展示版：虚构演示数据 + 仅 Mock AI；末尾自动跑种子隔离门禁
+npm run build        # 真实版：tsc -b（严格检查） + vite build → dist/（真实种子数据 + Firebase 云同步）
+npm run build:demo   # ★ 公网展示版：虚构演示数据 + 无云同步 + 仅 Mock AI；末尾自动跑种子隔离门禁
+npm run deploy       # ★ 正式发布：build + firebase deploy（静态站 + Firestore 规则 + 云函数）
 npm run preview      # 预览构建产物
-npm run verify       # ★ AI 安全门禁 17 项（改动 AI 相关后必跑）
+npm run verify       # ★ AI 安全门禁 26 项（改动 AI/云函数后必跑）
 npm run verify:seed:real   # 检查 dist 为真实包且不含演示数据
 npm run verify:seed:demo   # 检查 dist 为演示包且不含真实数据
+cd functions && npm install && cd ..   # 云函数依赖（部署前）
+firebase functions:secrets:set DEEPSEEK_API_KEY   # 云端密钥（部署前）
 ```
 
 ---
@@ -258,9 +271,9 @@ npm run verify:seed:demo   # 检查 dist 为演示包且不含真实数据
 
 1. **端口**：5173 落在本机 Windows 保留端口段（Hyper-V 保留 5141–5240，`netsh interface ipv4 show excludedportrange protocol=tcp` 可查），绑定即 EACCES。因此前端用 **8788**、AI 代理 **8787**，且 `vite.config.ts` 显式 `host:"127.0.0.1"`（避开 ::1）。**不要改回 5173**；换端口用 `--port` 参数。
 2. **年份差异**：秋招文档快照写 "2025-08-18"，而本机系统时钟为 2026-08-18。种子 `settings.startDate="2026-08-18"` 使"今天=第 1 周"成立。若实际日期不同，改 startDate 即自动校准周次。
-3. **持久化语义**：localStorage 是唯一存储。清浏览器数据即丢数据——所以 `/data` 的导出备份是刚需。新增字段走 `mergeState`（settings 浅合并，数组以存储为准）。
+3. **持久化语义**：未登录时 localStorage 是唯一存储（清浏览器数据即丢数据，`/data` 导出备份是刚需）；登录后本地 + 云端 Firestore 双写（云端为真、本地为备份，见 §14）。新增字段走 `mergeState`（settings 浅合并，数组以存储为准）；云端文档整份覆盖（`replace-state`），字段缺失有兜底。
 4. **seed 是真实数据**：12 家冲刺层公司、W1–W10、两个项目、24 个知识主题均来自策略文档，可自由增删改，但**已初始化过 localStorage 的用户不会自动拿到 seed 改动**（数组以存储为准）；如需推送新种子，需在 merge 逻辑或版本迁移上处理。
-5. **验证脚本是字符串检查**：`verify-ai.mjs` 依赖特定字符串（如 `attempt < 2`、`updateInterview(` 等），重构成其他写法会误报/漏报，改动后跑 `npm run verify` 确认。
+5. **验证脚本是字符串检查**：`verify-ai.mjs` 依赖特定字符串（如 `attempt < 2`、`updateInterview(` 等），重构成其他写法会误报/漏报，改动后跑 `npm run verify` 确认（当前 26 项，含云函数 9 项）。
 6. **dev 服务器在本沙箱内无法监听端口**（EACCES），冒烟测试只能在用户本机做；构建（tsc+vite）可在任意环境验证。
 7. **旧项目归档**：`F:\MyWorld` 保持不动，仅作架构参考（repository/selector、AI 代理、验证门禁三样可借鉴）。
 
@@ -268,7 +281,7 @@ npm run verify:seed:demo   # 检查 dist 为演示包且不含真实数据
 
 ## 11. 路线图与下一步
 
-已交付：MVP 底座（8 页面+持久化）→ 数据导入导出 → AI 助手（问答/复盘/简历翻译）→ 高频面试题库自动汇总（`/question-bank`，从 `InterviewLog.questions` 每题一行汇总去重、按频率排序、标记已掌握、导出 Markdown；复盘正文为自由文本不参与解析）→ 公网展示版（`build:demo` 演示数据 + 种子隔离门禁，见 §13 / `docs/DEPLOY.md`）。
+已交付：MVP 底座（8 页面+持久化）→ 数据导入导出 → AI 助手（问答/复盘/简历翻译）→ 高频面试题库自动汇总（`/question-bank`，从 `InterviewLog.questions` 每题一行汇总去重、按频率排序、标记已掌握、导出 Markdown；复盘正文为自由文本不参与解析）→ 公网展示版（`build:demo` 演示数据 + 种子隔离门禁，见 §13 / `docs/DEPLOY.md`）→ Firebase 云端化（认证 + Firestore 跨设备同步 + AI 云函数，见 §14 / `docs/FIREBASE_SETUP.md`）。
 
 待办（按价值排序）：
 
@@ -313,4 +326,56 @@ npm run verify:seed:demo   # 检查 dist 为演示包且不含真实数据
 ### 13.3 边界与第二阶段
 
 - 公网包**不含**真实数据与密钥；`dist/_redirects` 提供 SPA 深链接回退；
-- 第二阶段（正式在线产品）：云端数据库 + 账户认证 + AI serverless 代理（密钥存云端环境变量），并把 `appStore` 持久化层从 localStorage 换成云同步——见 `docs/DEPLOY.md` 末尾预告。
+- 第二阶段（正式在线产品）：云端数据库 + 账户认证 + AI serverless 代理（密钥存云端环境变量），并把 `appStore` 持久化层从 localStorage 换成云同步——**已完成，见 §14 / `docs/FIREBASE_SETUP.md`**。
+
+---
+
+## 14. 云同步（第二阶段，Firebase，详见 `docs/FIREBASE_SETUP.md`）
+
+### 14.1 架构
+
+```
+浏览器（React SPA）
+ ├─ 未登录：本地模式（localStorage，与原版一致，seed 兜底）
+ └─ 登录后：
+     ├─ Firebase Auth（邮箱密码）→ 会话由 Google 托管
+     ├─ Firestore states/{uid} ──onSnapshot 实时同步 + IndexedDB 离线缓存（多标签页）
+     └─ Cloud Functions（asia-east1，仅登录用户可调）：
+         ├─ deepseekProxy  → 调 DeepSeek（密钥 = 云端 secret，process.env.DEEPSEEK_API_KEY）
+         └─ deepseekStatus → 密钥是否已配置
+```
+
+- 数据模型不变：每个用户一个文档 `states/{uid}`，字段 `{ data: AppState, updatedAt: serverTimestamp }`（1 MiB 文档上限内，个人数据量绰绰有余）；
+- Firestore 规则 `firestore.rules`：只允许 `request.auth.uid == uid` 读写，用户之间天然隔离。
+
+### 14.2 客户端同步实现（`src/store/appStore.tsx` + `src/services/firebase.ts`）
+
+- **开关**：`firebaseEnabled = !__DEMO_MODE__ && 已填 VITE_FIREBASE_*`——展示版与未配置环境自动禁用云能力，退回本地模式；
+- **登录监听**：`subscribeAuth`（onAuthStateChanged）→ 登出时清空远端引用，回到本地模式；
+- **快照订阅**：登录后 `onSnapshot(states/{uid})`，`snapshot.metadata.hasPendingWrites` 跳过自己刚写入的回显；远端无文档 → `cloudEmpty=true`（顶栏出现"上传本机数据"）；远端有文档 → `isAppState` 校验后 `replace-state` 整状态覆盖；
+- **防抖上传**：状态变化 600ms 后 `setDoc`（`merge:true` + serverTimestamp）；`lastRemoteJson` 记录已应用的远端 JSON，与当前状态一致时不写回，**避免同步死循环**；
+- **离线**：IndexedDB 持久化（`persistentLocalCache` + 多标签页），断网照常用、恢复后自动补传；
+- **并发语义**：多设备最后写入者胜（serverTimestamp 排序），个人工具可接受；旧备份字段缺失由 `replace-state` 兜底（`questionBankMastered ?? []`）。
+
+### 14.3 AI 双路径（`src/services/ai/DeepSeekAdapter.ts`）
+
+| 环境 | 路径 | 密钥位置 |
+|---|---|---|
+| 开发（`import.meta.env.DEV`） | `fetch("/api/ai/deepseek")` → Vite 代理 → 本地代理 8787 | `.env`（本机） |
+| 生产 | `httpsCallable(deepseekProxy)` → Cloud Functions | 云端 secret |
+
+- 云函数错误 → `mapCallableError` 映射回既有业务错误码（AUTH_REQUIRED / AI_NOT_CONFIGURED_CLOUD / RATE_LIMITED…）；
+- **真实 DeepSeek 仅登录用户可用**（云函数校验 `request.auth`，防止他人刷你的额度）；未登录点 DeepSeek 会提示"需要先登录"。
+
+### 14.4 门禁与安全（勿破坏）
+
+- `npm run verify` 现为 **26 项**：原 17 项（本地代理）+ 新增 9 项云函数检查（密钥只用环境变量 / 要求登录 / Bearer / JSON Output / 限流 / 超时重试 / 仅重试 429,500,503 / 生产只调 callable / 不记录正文）+ "浏览器代码不含密钥名"（UI 文案里不要出现 `DEEPSEEK_API_KEY` 字面量）；
+- 密钥部署：`firebase functions:secrets:set DEEPSEEK_API_KEY` + 函数 `secrets: ["DEEPSEEK_API_KEY"]`（v2 必须显式挂载，否则 `process.env` 读不到）；
+- 包体积：firebase SDK 单独 manualChunks（`firebase-*.js` ~194KB gz），独立缓存；后续可用动态 import 让展示版进一步瘦身。
+
+### 14.5 运维要点
+
+- 部署：`npm run deploy`（build + firebase deploy：Hosting / Firestore rules / Functions）；
+- 免费 Spark 计划：Firestore 1GiB、5 万读/2 万写每天、Functions 200 万次/月，个人够用；超限自动停不扣费；
+- 数据迁移：旧 localStorage 数据 → `/data` 导出 JSON → 登录新站后导入，或登录后"上传本机数据"；
+- 展示版与正式版是不同 origin，localStorage 互不影响。

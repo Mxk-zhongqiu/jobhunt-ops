@@ -20,4 +20,15 @@ export default defineConfig(({ mode }) => ({
       "/api/ai": "http://127.0.0.1:8787",
     },
   },
+  build: {
+    chunkSizeWarningLimit: 1300,
+    rollupOptions: {
+      output: {
+        // Firebase SDK 单独成包：体积大但极少变动，利于浏览器长期缓存
+        manualChunks: {
+          firebase: ["firebase/app", "firebase/auth", "firebase/firestore", "firebase/functions"],
+        },
+      },
+    },
+  },
 }));

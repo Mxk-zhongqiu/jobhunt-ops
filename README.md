@@ -63,6 +63,14 @@ npm run verify:seed:demo   # 检查当前 dist 是演示包且不含真实数据
 - 本地 `npm run dev` / `npm run build` 仍为真实数据 + 真实 DeepSeek（本地代理），互不干扰；
 - 跨设备数据同步（账户 + 云端数据库）属于第二阶段，见 `docs/DEPLOY.md`。
 
+## 云同步（第二阶段，Firebase）
+
+**邮箱密码注册/登录 → 数据自动同步到云端，手机/电脑登录同一账号即互通**。详细开通步骤见 [`docs/FIREBASE_SETUP.md`](docs/FIREBASE_SETUP.md)。
+
+- 认证：Firebase Auth；数据库：Firestore `states/{uid}`（规则只允许读写自己的文档）；离线缓存：IndexedDB；
+- AI 上云：`functions/` 云函数代理 DeepSeek，**密钥存云端环境变量，浏览器接触不到**（门禁 26 项自动检查）；
+- 未登录/未配置：自动退回本地模式（localStorage），与原版行为一致；公网展示版永不连接真实 Firebase。
+
 ## AI 助手
 
 - 三种能力：**知识问答**（不写入）、**面试复盘草稿**（确认后写入面试记录的复盘字段）、**简历要点翻译**（经历 → 量化岗语言，可复制）；

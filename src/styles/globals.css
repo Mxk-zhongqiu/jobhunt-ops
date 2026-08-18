@@ -365,3 +365,30 @@ button.danger:hover { background: var(--red); color: #fff; }
   content: ""; position: absolute; left: 5px; top: 1px; width: 4px; height: 9px;
   border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
 }
+
+/* ─── 账号与云同步 ─── */
+.topbar-right { display: flex; align-items: center; gap: 10px; }
+.auth-widget { display: flex; align-items: center; }
+.auth-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--muted); background: var(--bg);
+  padding: 4px 10px; border-radius: 999px;
+}
+.auth-user { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.auth-email { font-size: 12px; color: var(--muted); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.auth-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(15, 23, 18, 0.45);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+}
+.auth-card {
+  width: 100%; max-width: 360px;
+  background: var(--panel); border-radius: 12px; border: 1px solid var(--border);
+  padding: 20px; display: flex; flex-direction: column; gap: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+}
+.auth-card h3 { font-size: 16px; }
+.auth-hint { margin: 0; font-size: 12px; color: var(--muted); }
+.auth-error { margin: 0; font-size: 12px; color: var(--red); background: var(--red-soft); padding: 8px 10px; border-radius: 8px; }
+.auth-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 4px; }

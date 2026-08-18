@@ -55,9 +55,10 @@ npm run build:demo
 - 数据隔离机制：构建期常量 `__DEMO_MODE__`（`vite.config.ts` 的 `define`，`--mode demo` 时为 true）让 Rollup 整体摇掉未使用的种子模块——**真实数据不进公网包，演示数据不进真实构建**；
 - 新增真实种子数据后，记得检查 `scripts/verify-seed.mjs` 的两组标记是否需要补充公司名。
 
-## 第二阶段预告（真正可持续使用的在线产品）
+## 第二阶段（真正可持续使用的在线产品）→ 已完成，见 `FIREBASE_SETUP.md`
 
-展示版的数据是每个访客浏览器独立的，不是"你的"数据。要做成跨设备同步的正式产品，需要：
-1. **云端数据库 + 账户**（注册/登录，把 `AppState` 存到云端）；
-2. **AI 服务上云**（DeepSeek 代理部署为 serverless 函数，密钥存云端环境变量）；
-3. 数据从 localStorage 迁移到云，替换 `appStore` 的持久化层。
+展示版的数据是每个访客浏览器独立的，不是"你的"数据。第二阶段已经实现 Firebase 云端化（`docs/FIREBASE_SETUP.md`）：
+
+1. **认证**：Firebase Auth 邮箱密码注册/登录（右上角账号组件）；
+2. **云端数据库 + 跨设备同步**：每个用户的 `AppState` 存 Firestore `states/{uid}`，实时同步 + IndexedDB 离线缓存，本地 localStorage 保留为备份；
+3. **AI 服务上云**：`functions/` 云函数（deepseekProxy / deepseekStatus）把 DeepSeek 代理搬到云端，密钥存 Google Secret Manager 环境变量，仅登录用户可调用；本地代理保留用于开发。

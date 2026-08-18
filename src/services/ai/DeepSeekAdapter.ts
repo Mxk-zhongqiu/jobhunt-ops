@@ -1,8 +1,11 @@
-// DeepSeekAdapter：只调用本机安全代理（127.0.0.1:8787），浏览器不接触 API 密钥。
-// 只把用户显式勾选的最小上下文发给代理；响应经过本地类型校验后才成为草稿。
+// DeepSeekAdapter：开发环境只调用本机安全代理（127.0.0.1:8787），生产环境调用 Firebase 云函数。
+// 两种路径下浏览器都不接触 API 密钥（本地密钥在服务端进程，云端密钥在函数环境变量）。
+// 只把用户显式勾选的最小上下文发送出去；响应经过本地类型校验后才成为草稿。
 
+import { httpsCallable } from "firebase/functions";
 import type { AppState } from "../../types/domain";
 import type { AIProposal, AIProposalPayload, AIProviderStatus, AIRequest, AIService } from "../../types/ai";
+import { firebaseEnabled, functions } from "../firebase";
 import { buildAIContextSummary } from "./context";
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -72,24 +75,65 @@ function authorizedContext(request: AIRequest, state: AppState) {
   };
 }
 
+/** 云函数调用错误 → 业务错误码（复用 AIWorkspace 的错误文案表） */
+function mapCallableError(error: unknown): string {
+  const err = error as { code?: string; message?: string };
+  const code = err.code ?? "";
+  if (code.includes("unauthenticated") || code.includes("permission-denied")) return "AUTH_REQUIRED";
+  const message = err.message ?? "";
+  const known = [
+    "AI_NOT_CONFIGURED",
+    "AI_NOT_CONFIGURED_CLOUD",
+    "AUTHENTICATION_FAILED",
+    "INSUFFICIENT_BALANCE",
+    "RATE_LIMITED",
+    "TIMEOUT",
+    "CONTEXT_TOO_LARGE",
+    "INVALID_REQUEST",
+  ];
+  if (known.includes(message)) return message;
+  return "DEEPSEEK_REQUEST_FAILED";
+}
+
 export class DeepSeekAdapter implements AIService {
   constructor(private readonly state: AppState) {}
 
   async generate(request: AIRequest): Promise<AIProposal> {
-    const response = await fetch("/api/ai/deepseek", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ request, authorizedContext: authorizedContext(request, this.state) }),
-    });
-    const result = (await response.json()) as {
-      code?: string;
-      content?: string;
-      model?: string;
-      requestId?: string;
-      usage?: AIProposal["usage"];
-      durationMs?: number;
-    };
-    if (!response.ok || !result.content) throw new Error(result.code ?? "DEEPSEEK_REQUEST_FAILED");
+    const body = { request, authorizedContext: authorizedContext(request, this.state) };
+    let result: { content?: string; model?: string; requestId?: string; usage?: AIProposal["usage"]; durationMs?: number };
+
+    if (import.meta.env.DEV) {
+      // 本地开发：走本机安全代理（npm run dev:full）
+      const response = await fetch("/api/ai/deepseek", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const parsed = (await response.json()) as {
+        code?: string;
+        content?: string;
+        model?: string;
+        requestId?: string;
+        usage?: AIProposal["usage"];
+        durationMs?: number;
+      };
+      if (!response.ok || !parsed.content) throw new Error(parsed.code ?? "DEEPSEEK_REQUEST_FAILED");
+      result = parsed;
+    } else {
+      // 生产：走 Firebase 云函数（密钥在云端环境变量）
+      if (!firebaseEnabled || !functions) throw new Error("AI_NOT_CONFIGURED_CLOUD");
+      try {
+        const proxy = httpsCallable<typeof body, { content?: string; model?: string; usage?: AIProposal["usage"]; durationMs?: number }>(functions, "deepseekProxy");
+        const response = await proxy(body);
+        result = response.data ?? {};
+      } catch (caught) {
+        throw new Error(mapCallableError(caught));
+      }
+    }
+
+    // 两种路径统一兜底：没有正文一律按失败处理
+    if (!result.content) throw new Error("DEEPSEEK_REQUEST_FAILED");
+
     return {
       id: `ai-proposal-${Date.now()}`,
       providerId: "deepseek",
@@ -107,7 +151,17 @@ export class DeepSeekAdapter implements AIService {
 }
 
 export async function getDeepSeekStatus(): Promise<AIProviderStatus> {
-  const response = await fetch("/api/ai/status", { headers: { Accept: "application/json" } });
-  if (!response.ok) throw new Error("AI_PROXY_UNAVAILABLE");
-  return (await response.json()) as AIProviderStatus;
+  if (import.meta.env.DEV) {
+    const response = await fetch("/api/ai/status", { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error("AI_PROXY_UNAVAILABLE");
+    return (await response.json()) as AIProviderStatus;
+  }
+  if (!firebaseEnabled || !functions) throw new Error("AI_NOT_CONFIGURED_CLOUD");
+  try {
+    const callable = httpsCallable<Record<string, never>, AIProviderStatus>(functions, "deepseekStatus");
+    const response = await callable();
+    return response.data;
+  } catch (caught) {
+    throw new Error(mapCallableError(caught));
+  }
 }

@@ -1,4 +1,5 @@
 node_modules
+functions/node_modules
 dist
 *.tsbuildinfo
 *.log
@@ -7,3 +8,6 @@ dist
 .env
 .env.local
 .env.*.local
+.firebase
+firebase-debug.log
+.firebaserc

@@ -1,0 +1,14 @@
+{
+  "name": "jobhunt-ops-functions",
+  "private": true,
+  "version": "1.0.0",
+  "description": "求职作战台 · Firebase Cloud Functions（DeepSeek 安全代理上云）",
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^5.1.0"
+  }
+}

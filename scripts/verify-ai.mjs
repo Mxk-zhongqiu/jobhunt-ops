@@ -11,6 +11,7 @@ const expect = (label, condition) => checks.push({ label, condition });
 const envExample = read(".env.example");
 const gitignore = read(".gitignore");
 const proxy = read("server/deepseek-proxy.mjs");
+const cloudProxy = read("functions/index.js");
 const adapter = read("src/services/ai/DeepSeekAdapter.ts");
 const services = read("src/services/ai/index.ts");
 const workspace = read("src/components/ai/AIWorkspace.tsx");
@@ -34,6 +35,17 @@ expect("AIService 工厂支持 Mock 与 DeepSeek", services.includes("createAISe
 expect("提供商默认 Mock 且可切换", seed.includes('aiProvider: "mock"') && workspace.includes("改用本地 Mock"));
 expect("正式写入只在确认分支（复盘写入）", workspace.indexOf("const accept = () =>") < workspace.indexOf("updateInterview("));
 expect("Vite 仅代理本地 AI 路径", vite.includes('"/api/ai": "http://127.0.0.1:8787"'));
+
+// ── 云函数（functions/index.js）安全门禁 ──
+expect("云函数密钥只用环境变量", cloudProxy.includes("process.env.DEEPSEEK_API_KEY") && !/sk-[A-Za-z0-9]{12,}/.test(cloudProxy));
+expect("云函数要求登录才能调用", cloudProxy.includes("request.auth") && cloudProxy.includes('HttpsError("unauthenticated"'));
+expect("云函数使用 Bearer 鉴权", cloudProxy.includes("Authorization: `Bearer ${apiKey}`"));
+expect("云函数结构化草稿启用 JSON Output", cloudProxy.includes('response_format: { type: "json_object" }') && cloudProxy.includes("只输出一个合法 json 对象"));
+expect("云函数限制上下文与输出规模", cloudProxy.includes("maxContextCharacters") && cloudProxy.includes("max_tokens: maxTokens"));
+expect("云函数超时与有限重试", cloudProxy.includes("AbortController") && cloudProxy.includes("attempt < 2") && cloudProxy.includes("timeoutMs"));
+expect("云函数仅重试限流和服务端故障", cloudProxy.includes("[429, 500, 503]"));
+expect("生产环境浏览器只调云函数", adapter.includes("httpsCallable") && !adapter.includes("api.deepseek.com"));
+expect("云函数不记录上下文正文", !cloudProxy.includes("callLogs"));
 
 const failed = checks.filter((check) => !check.condition);
 if (failed.length) {

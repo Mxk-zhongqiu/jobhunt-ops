@@ -17,7 +17,9 @@ const DEMO_MODE = __DEMO_MODE__;
 
 const errorMessages: Record<string, string> = {
   AI_NOT_CONFIGURED: "本地服务尚未配置 DeepSeek API 密钥（请在项目根目录 .env 中配置后重启）。",
+  AI_NOT_CONFIGURED_CLOUD: "云端 AI 未配置：需部署 Firebase Functions 并在云端环境变量中设置 DeepSeek 密钥（见 docs/FIREBASE_SETUP.md）。",
   AI_PROXY_UNAVAILABLE: "本地 AI 代理未启动（先运行 npm run dev:full 或 npm run ai:proxy）。",
+  AUTH_REQUIRED: "使用真实 DeepSeek 需要先登录账号（右上角登录 / 注册）。",
   AUTHENTICATION_FAILED: "DeepSeek API 密钥无效。",
   INSUFFICIENT_BALANCE: "DeepSeek 账户余额不足。",
   RATE_LIMITED: "DeepSeek 当前请求过多，请稍后重试。",
