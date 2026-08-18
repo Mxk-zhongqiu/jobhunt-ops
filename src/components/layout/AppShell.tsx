@@ -1,5 +1,5 @@
-import { BookOpen, Bot, CalendarCheck, FolderKanban, HardDriveDownload, LayoutDashboard, ListChecks, MessageSquareText, Send, type LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { BookOpen, Bot, CalendarCheck, FolderKanban, HardDriveDownload, LayoutDashboard, ListChecks, Menu, MessageSquareText, Send, type LucideIcon } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { AuthWidget } from "../auth/AuthWidget";
 import { currentWeek, useAppData } from "../../store/appStore";
@@ -27,10 +27,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
   const week = currentWeek(settings);
   const currentLabel = navItems.find((item) => item.path === location.pathname)?.label ?? "作战总览";
+  // 移动端抽屉菜单
+  const [navOpen, setNavOpen] = useState(false);
+  const closeNav = () => setNavOpen(false);
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      <div className={`sidebar-backdrop${navOpen ? " show" : ""}`} onClick={closeNav} />
+      <aside className={`sidebar${navOpen ? " open" : ""}`}>
         <div className="sidebar-header">
           <strong>求职作战台</strong>
           <span>2026 秋招</span>
@@ -39,7 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {navItems.map((item) => {
             const Icon = item.icon;
             return (
-              <NavLink key={item.path} to={item.path} end={item.path === "/"} className={({ isActive }) => (isActive ? "active" : "")}>
+              <NavLink key={item.path} to={item.path} end={item.path === "/"} className={({ isActive }) => (isActive ? "active" : "")} onClick={closeNav}>
                 <Icon size={17} />
                 <span>{item.label}</span>
               </NavLink>
@@ -53,6 +57,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
       <main className="main">
         <header className="topbar">
+          <button type="button" className="menu-btn" aria-label="打开菜单" onClick={() => setNavOpen(true)}><Menu size={19} /></button>
           <div>
             <h1>{currentLabel}</h1>
             <p>{new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}</p>
