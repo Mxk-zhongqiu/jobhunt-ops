@@ -1,9 +1,15 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
+// build:demo（vite build --mode demo）＝ 公网展示版：种子数据切换为虚构演示数据、
+// AI 仅本地 Mock。用 define 静态替换 __DEMO_MODE__，让 Rollup 彻底摇掉未使用的种子分支
+// （避免真实数据/演示数据混进对方产物）。
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
   base: "./",
+  define: {
+    __DEMO_MODE__: JSON.stringify(mode === "demo"),
+  },
   server: {
     // 显式绑定 IPv4 回环：避免 Windows 下 localhost 解析到 ::1 导致 listen EACCES
     host: "127.0.0.1",
@@ -14,4 +20,4 @@ export default defineConfig({
       "/api/ai": "http://127.0.0.1:8787",
     },
   },
-});
+}));

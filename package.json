@@ -8,8 +8,11 @@
     "dev:full": "node scripts/dev-full.mjs",
     "ai:proxy": "node server/deepseek-proxy.mjs",
     "build": "tsc -b && vite build",
+    "build:demo": "tsc -b && vite build --mode demo && node scripts/verify-seed.mjs --expect-demo",
     "preview": "vite preview",
-    "verify": "node scripts/verify-ai.mjs"
+    "verify": "node scripts/verify-ai.mjs",
+    "verify:seed:real": "node scripts/verify-seed.mjs --expect-real",
+    "verify:seed:demo": "node scripts/verify-seed.mjs --expect-demo"
   },
   "dependencies": {
     "clsx": "^2.1.1",

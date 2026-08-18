@@ -48,9 +48,20 @@ npm run ai:proxy   # 只启动代理（127.0.0.1:8787）
 ## 构建与验证
 
 ```bash
-npm run build      # tsc -b && vite build，产物在 dist/
-npm run verify     # AI 安全代码级验收（密钥只在服务端 / 最小上下文 / 确认写入）
+npm run build        # 真实版：tsc -b && vite build，产物在 dist/（真实种子数据）
+npm run build:demo   # 公网展示版：虚构演示数据 + 仅 Mock AI，构建末尾自动检查无真实数据泄漏
+npm run verify       # AI 安全代码级验收（密钥只在服务端 / 最小上下文 / 确认写入）
+npm run verify:seed:real   # 检查当前 dist 是真实包且不含演示数据
+npm run verify:seed:demo   # 检查当前 dist 是演示包且不含真实数据
 ```
+
+## 公网展示版（部署）
+
+发布为公网网站、任何设备可访问、无需电脑开机：见 [`docs/DEPLOY.md`](docs/DEPLOY.md)（Netlify Drop / Cloudflare Pages 一键部署）。
+
+- 展示版 = 完整界面 + **虚构演示数据** + 仅本地 Mock AI；**真实种子数据被构建期隔离门禁拦截，绝不进公网包**；
+- 本地 `npm run dev` / `npm run build` 仍为真实数据 + 真实 DeepSeek（本地代理），互不干扰；
+- 跨设备数据同步（账户 + 云端数据库）属于第二阶段，见 `docs/DEPLOY.md`。
 
 ## AI 助手
 

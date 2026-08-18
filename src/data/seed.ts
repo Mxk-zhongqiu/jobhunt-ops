@@ -5,11 +5,18 @@ import type {
   QuantProject,
   WeeklyPlan,
 } from "../types/domain";
+import { createDemoState } from "./demoSeed";
 
 // ─── 种子数据：直接来自《求职规划内部文档》 ───
 // 这是"真实作战数据"的初始清单，不是演示数据。用户可以自由修改、删除、补充。
+//
+// ⚠️ 本模块必须保持"零顶层副作用"（顶层只有函数/纯常量声明，没有函数调用）：
+// 公网展示版（build:demo）时 __DEMO_MODE__=true，Rollup 才能把本模块整体摇掉，
+// 真实数据才不会混进公网产物。新增数据请放进对应构造函数（build*）里。
 
-const now = new Date().toISOString();
+function now(): string {
+  return new Date().toISOString();
+}
 
 function application(
   company: string,
@@ -25,22 +32,25 @@ function application(
     position: "量化研究员（2026 届）",
     positionKind,
     status: "计划投递",
-    createdAt: now,
-    updatedAt: now,
+    createdAt: now(),
+    updatedAt: now(),
   };
 }
 
 // 第一层（冲刺）：投但不报期望。数据来源：文档 §五 投递分层。
 const sprintCompanies = ["幻方", "九坤", "明汯", "衍复", "宽德", "灵均", "启林", "因诺", "蒙玺", "迎水", "佳期", "DTL"];
 
-export const seedApplications: Application[] = sprintCompanies.map((company) => application(company, "冲刺"));
+function buildSeedApplications(): Application[] {
+  return sprintCompanies.map((company) => application(company, "冲刺"));
+}
 
 function task(id: string, text: string, done = false) {
   return { id, text, done };
 }
 
 // 十周行动清单：文档 §七（周次与日期范围）
-export const seedWeeklyPlans: WeeklyPlan[] = [
+function buildSeedWeeklyPlans(): WeeklyPlan[] {
+  return [
   {
     week: 1, label: "8/18–8/24 定方向与启动",
     tasks: [
@@ -122,7 +132,8 @@ export const seedWeeklyPlans: WeeklyPlan[] = [
       task("w10t3", "准备春招"),
     ],
   },
-];
+  ];
+}
 
 // 两个项目：文档 §四 项目规划
 export const seedProjects: QuantProject[] = [
@@ -192,10 +203,20 @@ export const seedKnowledge: KnowledgeTopic[] = [
 ];
 
 export function createSeedState(): AppState {
+  // 公网展示版（npm run build:demo）使用虚构演示数据，避免真实求职策略外泄；
+  // 本地开发与正式构建保持真实种子数据不变。__DEMO_MODE__ 由构建期 define 注入，
+  // 未使用的分支会被 Rollup 整体摇掉（真实数据不进公网包，反之亦然）。
+  if (__DEMO_MODE__) {
+    return createDemoState();
+  }
+  return createRealSeedState();
+}
+
+function createRealSeedState(): AppState {
   return {
-    applications: seedApplications,
+    applications: buildSeedApplications(),
     interviews: [],
-    weeklyPlans: seedWeeklyPlans,
+    weeklyPlans: buildSeedWeeklyPlans(),
     projects: seedProjects,
     knowledge: seedKnowledge,
     settings: {

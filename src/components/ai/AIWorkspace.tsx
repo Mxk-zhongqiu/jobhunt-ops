@@ -11,6 +11,10 @@ const capabilities: Array<{ id: AICapability; label: string; description: string
   { id: "resume", label: "简历要点翻译", description: "经历 → 量化岗语言，可复制" },
 ];
 
+// 公网展示版（npm run build:demo）：静态托管没有本地代理，隐藏真实 DeepSeek 入口，仅保留本地 Mock。
+// __DEMO_MODE__ 由 vite.config.ts 的 define 构建期注入。
+const DEMO_MODE = __DEMO_MODE__;
+
 const errorMessages: Record<string, string> = {
   AI_NOT_CONFIGURED: "本地服务尚未配置 DeepSeek API 密钥（请在项目根目录 .env 中配置后重启）。",
   AI_PROXY_UNAVAILABLE: "本地 AI 代理未启动（先运行 npm run dev:full 或 npm run ai:proxy）。",
@@ -120,8 +124,14 @@ export function AIWorkspace({ state }: { state: AppState }) {
         </div>
         <div className="provider-switch">
           <button type="button" className={runtimeProvider === "mock" ? "active" : ""} onClick={() => switchProvider("mock")}>Mock 本地规则</button>
-          <button type="button" className={runtimeProvider === "deepseek" ? "active" : ""} onClick={() => switchProvider("deepseek")}>DeepSeek 真实 API</button>
-          {runtimeProvider === "deepseek" ? <span className={`provider-status ${providerStatus?.configured ? "ok" : "no"}`}>{providerStatus === null ? "检测中…" : providerStatus.configured ? "已配置" : "未配置密钥"}</span> : null}
+          {!DEMO_MODE ? (
+            <>
+              <button type="button" className={runtimeProvider === "deepseek" ? "active" : ""} onClick={() => switchProvider("deepseek")}>DeepSeek 真实 API</button>
+              {runtimeProvider === "deepseek" ? <span className={`provider-status ${providerStatus?.configured ? "ok" : "no"}`}>{providerStatus === null ? "检测中…" : providerStatus.configured ? "已配置" : "未配置密钥"}</span> : null}
+            </>
+          ) : (
+            <span className="provider-status no">公网展示版 · 仅本地 Mock</span>
+          )}
         </div>
       </div>
 
