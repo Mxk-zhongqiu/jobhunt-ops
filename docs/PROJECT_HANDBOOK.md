@@ -57,9 +57,11 @@ F:\jobhunt-ops\
 │   └── FIREBASE_SETUP.md       # ★ 第二阶段云端化上线指南（见 §14）
 ├── server/
 │   └── deepseek-proxy.mjs      # ★ DeepSeek 本地安全代理（密钥只在此侧，开发用）
-├── functions/                  # ★ Firebase 云函数（第二阶段，见 §14）
+├── functions/                  # ★ Firebase 云函数（备选方案，需 Blaze 付费计划，见 §14.1）
 │   ├── package.json            # firebase-functions / firebase-admin，node 20
-│   └── index.js                # ★ deepseekProxy / deepseekStatus（密钥=云端 secret）
+│   └── index.js                # deepseekProxy / deepseekStatus（密钥=云端 secret）
+├── worker/
+│   └── ai-proxy.js             # ★ Cloudflare Worker AI 代理（默认方案，免费；密钥=Worker 环境变量 + 登录令牌校验，见 §14）
 ├── scripts/
 │   ├── dev-full.mjs            # 一条命令：AI 代理 + Vite（透传 vite 参数）
 │   ├── verify-ai.mjs           # ★ AI 安全门禁（26 项字符串检查，见 §7.5 / §14.4）
@@ -256,13 +258,13 @@ npm run dev:full -- --port 8789   # 换端口（dev-full 透传 vite 参数）
 npm run ai:proxy     # 只起代理
 npm run build        # 真实版：tsc -b（严格检查） + vite build → dist/（真实种子数据 + Firebase 云同步）
 npm run build:demo   # ★ 公网展示版：虚构演示数据 + 无云同步 + 仅 Mock AI；末尾自动跑种子隔离门禁
-npm run deploy       # ★ 正式发布：build + firebase deploy（静态站 + Firestore 规则 + 云函数）
+npm run deploy       # ★ 正式发布：build + firebase deploy --only hosting,firestore:rules（免费计划不含 functions）
 npm run preview      # 预览构建产物
 npm run verify       # ★ AI 安全门禁 26 项（改动 AI/云函数后必跑）
 npm run verify:seed:real   # 检查 dist 为真实包且不含演示数据
 npm run verify:seed:demo   # 检查 dist 为演示包且不含真实数据
-cd functions && npm install && cd ..   # 云函数依赖（部署前）
-firebase functions:secrets:set DEEPSEEK_API_KEY   # 云端密钥（部署前）
+cd functions && npm install && cd ..   # 云函数依赖（仅 Blaze 备选方案需要）
+# 云端密钥（默认方案 Cloudflare Worker）：控制台 → Worker → 设置 → 变量和机密 → 机密 DEEPSEEK_API_KEY
 ```
 
 ---
@@ -340,13 +342,14 @@ firebase functions:secrets:set DEEPSEEK_API_KEY   # 云端密钥（部署前）
  └─ 登录后：
      ├─ Firebase Auth（邮箱密码）→ 会话由 Google 托管
      ├─ Firestore states/{uid} ──onSnapshot 实时同步 + IndexedDB 离线缓存（多标签页）
-     └─ Cloud Functions（asia-east1，仅登录用户可调）：
-         ├─ deepseekProxy  → 调 DeepSeek（密钥 = 云端 secret，process.env.DEEPSEEK_API_KEY）
-         └─ deepseekStatus → 密钥是否已配置
+     └─ Cloudflare Worker（worker/ai-proxy.js，免费计划）：
+         ├─ POST /deepseek → 调 DeepSeek（密钥 = Worker 环境变量 env.DEEPSEEK_API_KEY；校验 Firebase ID Token，仅登录用户）
+         └─ GET  /status   → 密钥是否已配置
 ```
 
 - 数据模型不变：每个用户一个文档 `states/{uid}`，字段 `{ data: AppState, updatedAt: serverTimestamp }`（1 MiB 文档上限内，个人数据量绰绰有余）；
-- Firestore 规则 `firestore.rules`：只允许 `request.auth.uid == uid` 读写，用户之间天然隔离。
+- Firestore 规则 `firestore.rules`：只允许 `request.auth.uid == uid` 读写，用户之间天然隔离；
+- **为什么不用 Firebase Cloud Functions**：函数构建依赖 Cloud Build，免费 Spark 计划不允许（需升级 Blaze 绑卡）。AI 代理改用 Cloudflare Worker（免费 10 万次/天）。仓库 `functions/` 保留为 Blaze 用户的备选方案（需改回 `httpsCallable` 路径）。
 
 ### 14.2 客户端同步实现（`src/store/appStore.tsx` + `src/services/firebase.ts`）
 
@@ -362,20 +365,21 @@ firebase functions:secrets:set DEEPSEEK_API_KEY   # 云端密钥（部署前）
 | 环境 | 路径 | 密钥位置 |
 |---|---|---|
 | 开发（`import.meta.env.DEV`） | `fetch("/api/ai/deepseek")` → Vite 代理 → 本地代理 8787 | `.env`（本机） |
-| 生产 | `httpsCallable(deepseekProxy)` → Cloud Functions | 云端 secret |
+| 生产 | `fetch(VITE_AI_PROXY_URL + "/deepseek")` → Cloudflare Worker | Worker 环境变量 |
 
-- 云函数错误 → `mapCallableError` 映射回既有业务错误码（AUTH_REQUIRED / AI_NOT_CONFIGURED_CLOUD / RATE_LIMITED…）；
-- **真实 DeepSeek 仅登录用户可用**（云函数校验 `request.auth`，防止他人刷你的额度）；未登录点 DeepSeek 会提示"需要先登录"。
+- 生产路径要求登录：`getIdToken()` 取 Firebase ID Token 放 `Authorization: Bearer`；Worker 用 identitytoolkit `accounts:lookup` 校验（无需 Admin SDK）；错误码直接透传（AUTH_REQUIRED / AI_NOT_CONFIGURED_CLOUD / RATE_LIMITED…）；
+- **真实 DeepSeek 仅登录用户可用**（Worker 校验令牌，防止他人刷你的额度）；未登录点 DeepSeek 会提示"需要先登录"；
+- `getDeepSeekStatus` 生产走 `GET {base}/status`（无需登录，只暴露是否已配置）。
 
 ### 14.4 门禁与安全（勿破坏）
 
-- `npm run verify` 现为 **26 项**：原 17 项（本地代理）+ 新增 9 项云函数检查（密钥只用环境变量 / 要求登录 / Bearer / JSON Output / 限流 / 超时重试 / 仅重试 429,500,503 / 生产只调 callable / 不记录正文）+ "浏览器代码不含密钥名"（UI 文案里不要出现 `DEEPSEEK_API_KEY` 字面量）；
-- 密钥部署：`firebase functions:secrets:set DEEPSEEK_API_KEY` + 函数 `secrets: ["DEEPSEEK_API_KEY"]`（v2 必须显式挂载，否则 `process.env` 读不到）；
-- 包体积：firebase SDK 单独 manualChunks（`firebase-*.js` ~194KB gz），独立缓存；后续可用动态 import 让展示版进一步瘦身。
+- `npm run verify` 现为 **36 项**：本地代理 17 项 + 云函数 9 项（`functions/` 备选方案仍检查）+ **Worker 10 项**（密钥只用 `env.` / 校验登录令牌 / 浏览器转发令牌 / Bearer 调 DeepSeek / JSON Output / 限流 / 超时重试 / 仅重试 429,500,503 / 不记录正文 / CORS）+ "浏览器代码不含密钥名"（UI 文案里不要出现 `DEEPSEEK_API_KEY` 字面量）；
+- Worker 密钥：控制台 → Worker → 设置 → 变量和机密 → **机密** `DEEPSEEK_API_KEY`（保存后不可见）；另需普通**变量** `FIREBASE_API_KEY`（公网配置，用于令牌校验）；改完必须**重新部署** Worker 才生效；
+- 包体积：firebase SDK 单独 manualChunks（`firebase-*.js` ~192KB gz），独立缓存；后续可用动态 import 让展示版进一步瘦身。
 
 ### 14.5 运维要点
 
-- 部署：`npm run deploy`（build + firebase deploy：Hosting / Firestore rules / Functions）；
-- 免费 Spark 计划：Firestore 1GiB、5 万读/2 万写每天、Functions 200 万次/月，个人够用；超限自动停不扣费；
+- 部署：`npm run deploy` = build + `firebase deploy --only hosting,firestore:rules`（**免费计划不含 functions**；云函数部署需 Blaze，已由 Worker 替代）；
+- 免费额度：Firebase Spark（Firestore 1GiB、5 万读/2 万写每天、Hosting 10GB，超限自动停不扣费）+ Cloudflare Worker 免费计划（10 万次/天）；
 - 数据迁移：旧 localStorage 数据 → `/data` 导出 JSON → 登录新站后导入，或登录后"上传本机数据"；
 - 展示版与正式版是不同 origin，localStorage 互不影响。

@@ -61,4 +61,4 @@ npm run build:demo
 
 1. **认证**：Firebase Auth 邮箱密码注册/登录（右上角账号组件）；
 2. **云端数据库 + 跨设备同步**：每个用户的 `AppState` 存 Firestore `states/{uid}`，实时同步 + IndexedDB 离线缓存，本地 localStorage 保留为备份；
-3. **AI 服务上云**：`functions/` 云函数（deepseekProxy / deepseekStatus）把 DeepSeek 代理搬到云端，密钥存 Google Secret Manager 环境变量，仅登录用户可调用；本地代理保留用于开发。
+3. **AI 服务上云**：`worker/ai-proxy.js`（Cloudflare Worker，免费）代理 DeepSeek，密钥存 Worker 环境变量、校验登录令牌；本地代理保留用于开发。若升级 Firebase Blaze，`functions/` 提供云函数备选。

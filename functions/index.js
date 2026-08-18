@@ -94,7 +94,10 @@ async function callDeepSeek(payload) {
 }
 
 // 生产 AI 入口：生成草稿（登录用户可用；密钥在云端）
-exports.deepseekProxy = onCall({ region: "asia-east1", timeoutSeconds: 60, secrets: ["DEEPSEEK_API_KEY"] }, async (request) => {
+// 密钥注入方式：functions/.env（免费 Spark 计划可用；已 gitignore，不入库）。
+// 若项目升级到 Blaze，可改用 Secret Manager：firebase functions:secrets:set DEEPSEEK_API_KEY
+// 并在 onCall 选项里加 secrets: ["DEEPSEEK_API_KEY"]。
+exports.deepseekProxy = onCall({ region: "asia-east1", timeoutSeconds: 60 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "AUTH_REQUIRED");
   const { request: aiRequest, authorizedContext } = request.data ?? {};
   if (!aiRequest || !authorizedContext) throw new HttpsError("invalid-argument", "INVALID_REQUEST");
@@ -119,7 +122,7 @@ exports.deepseekProxy = onCall({ region: "asia-east1", timeoutSeconds: 60, secre
 });
 
 // 生产 AI 状态检查：密钥是否已配置（登录用户可用）
-exports.deepseekStatus = onCall({ region: "asia-east1", secrets: ["DEEPSEEK_API_KEY"] }, async (request) => {
+exports.deepseekStatus = onCall({ region: "asia-east1" }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "AUTH_REQUIRED");
   return { configured: Boolean(apiKey), providerId: "deepseek", model, maxTokens, timeoutMs };
 });

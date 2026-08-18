@@ -12,6 +12,7 @@ const envExample = read(".env.example");
 const gitignore = read(".gitignore");
 const proxy = read("server/deepseek-proxy.mjs");
 const cloudProxy = read("functions/index.js");
+const worker = read("worker/ai-proxy.js");
 const adapter = read("src/services/ai/DeepSeekAdapter.ts");
 const services = read("src/services/ai/index.ts");
 const workspace = read("src/components/ai/AIWorkspace.tsx");
@@ -44,8 +45,20 @@ expect("云函数结构化草稿启用 JSON Output", cloudProxy.includes('respon
 expect("云函数限制上下文与输出规模", cloudProxy.includes("maxContextCharacters") && cloudProxy.includes("max_tokens: maxTokens"));
 expect("云函数超时与有限重试", cloudProxy.includes("AbortController") && cloudProxy.includes("attempt < 2") && cloudProxy.includes("timeoutMs"));
 expect("云函数仅重试限流和服务端故障", cloudProxy.includes("[429, 500, 503]"));
-expect("生产环境浏览器只调云函数", adapter.includes("httpsCallable") && !adapter.includes("api.deepseek.com"));
+expect("生产环境浏览器只调 Worker 代理", adapter.includes("VITE_AI_PROXY_URL") && !adapter.includes("api.deepseek.com") && !adapter.includes("httpsCallable"));
 expect("云函数不记录上下文正文", !cloudProxy.includes("callLogs"));
+
+// ── Cloudflare Worker 代理（worker/ai-proxy.js）安全门禁 ──
+expect("Worker 密钥只用环境变量", worker.includes("env.DEEPSEEK_API_KEY") && !/sk-[A-Za-z0-9]{12,}/.test(worker));
+expect("Worker 校验登录令牌", worker.includes("idToken") && worker.includes("accounts:lookup"));
+expect("浏览器向 Worker 转发用户令牌", adapter.includes("Authorization: `Bearer ${idToken}`"));
+expect("Worker 使用 Bearer 鉴权调用 DeepSeek", worker.includes("Authorization: `Bearer ${env.DEEPSEEK_API_KEY}`"));
+expect("Worker 结构化草稿启用 JSON Output", worker.includes('response_format: { type: "json_object" }') && worker.includes("只输出一个合法 json 对象"));
+expect("Worker 限制上下文与输出规模", worker.includes("maxContextCharacters") && worker.includes("max_tokens: maxTokens"));
+expect("Worker 超时与有限重试", worker.includes("AbortController") && worker.includes("attempt < 2") && worker.includes("timeoutMs"));
+expect("Worker 仅重试限流和服务端故障", worker.includes("[429, 500, 503]"));
+expect("Worker 不记录上下文正文", !worker.includes("callLogs"));
+expect("Worker 带跨域 CORS 头", worker.includes("Access-Control-Allow-Origin"));
 
 const failed = checks.filter((check) => !check.condition);
 if (failed.length) {

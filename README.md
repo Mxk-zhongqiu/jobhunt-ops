@@ -68,7 +68,7 @@ npm run verify:seed:demo   # 检查当前 dist 是演示包且不含真实数据
 **邮箱密码注册/登录 → 数据自动同步到云端，手机/电脑登录同一账号即互通**。详细开通步骤见 [`docs/FIREBASE_SETUP.md`](docs/FIREBASE_SETUP.md)。
 
 - 认证：Firebase Auth；数据库：Firestore `states/{uid}`（规则只允许读写自己的文档）；离线缓存：IndexedDB；
-- AI 上云：`functions/` 云函数代理 DeepSeek，**密钥存云端环境变量，浏览器接触不到**（门禁 26 项自动检查）；
+- AI 上云：Cloudflare Worker 代理 DeepSeek（免费计划），**密钥存 Worker 环境变量，浏览器接触不到**（门禁 36 项自动检查），仅登录用户可用；
 - 未登录/未配置：自动退回本地模式（localStorage），与原版行为一致；公网展示版永不连接真实 Firebase。
 
 ## AI 助手

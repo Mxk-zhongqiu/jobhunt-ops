@@ -1,11 +1,10 @@
-// DeepSeekAdapter：开发环境只调用本机安全代理（127.0.0.1:8787），生产环境调用 Firebase 云函数。
-// 两种路径下浏览器都不接触 API 密钥（本地密钥在服务端进程，云端密钥在函数环境变量）。
+// DeepSeekAdapter：开发环境只调用本机安全代理（127.0.0.1:8787），生产环境调用 Cloudflare Worker 代理。
+// 两种路径下浏览器都不接触 API 密钥（本地密钥在服务端进程，云端密钥在 Worker 环境变量）。
 // 只把用户显式勾选的最小上下文发送出去；响应经过本地类型校验后才成为草稿。
 
-import { httpsCallable } from "firebase/functions";
 import type { AppState } from "../../types/domain";
 import type { AIProposal, AIProposalPayload, AIProviderStatus, AIRequest, AIService } from "../../types/ai";
-import { firebaseEnabled, functions } from "../firebase";
+import { auth, firebaseEnabled } from "../firebase";
 import { buildAIContextSummary } from "./context";
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -75,26 +74,6 @@ function authorizedContext(request: AIRequest, state: AppState) {
   };
 }
 
-/** 云函数调用错误 → 业务错误码（复用 AIWorkspace 的错误文案表） */
-function mapCallableError(error: unknown): string {
-  const err = error as { code?: string; message?: string };
-  const code = err.code ?? "";
-  if (code.includes("unauthenticated") || code.includes("permission-denied")) return "AUTH_REQUIRED";
-  const message = err.message ?? "";
-  const known = [
-    "AI_NOT_CONFIGURED",
-    "AI_NOT_CONFIGURED_CLOUD",
-    "AUTHENTICATION_FAILED",
-    "INSUFFICIENT_BALANCE",
-    "RATE_LIMITED",
-    "TIMEOUT",
-    "CONTEXT_TOO_LARGE",
-    "INVALID_REQUEST",
-  ];
-  if (known.includes(message)) return message;
-  return "DEEPSEEK_REQUEST_FAILED";
-}
-
 export class DeepSeekAdapter implements AIService {
   constructor(private readonly state: AppState) {}
 
@@ -120,15 +99,31 @@ export class DeepSeekAdapter implements AIService {
       if (!response.ok || !parsed.content) throw new Error(parsed.code ?? "DEEPSEEK_REQUEST_FAILED");
       result = parsed;
     } else {
-      // 生产：走 Firebase 云函数（密钥在云端环境变量）
-      if (!firebaseEnabled || !functions) throw new Error("AI_NOT_CONFIGURED_CLOUD");
+      // 生产：走 Cloudflare Worker 代理（密钥在 Worker 环境变量）；需登录（携带 Firebase ID Token）
+      const base = import.meta.env.VITE_AI_PROXY_URL as string | undefined;
+      if (!firebaseEnabled || !base) throw new Error("AI_NOT_CONFIGURED_CLOUD");
+      if (!auth?.currentUser) throw new Error("AUTH_REQUIRED");
+      const idToken = await auth.currentUser.getIdToken();
+      let response: Response;
       try {
-        const proxy = httpsCallable<typeof body, { content?: string; model?: string; usage?: AIProposal["usage"]; durationMs?: number }>(functions, "deepseekProxy");
-        const response = await proxy(body);
-        result = response.data ?? {};
-      } catch (caught) {
-        throw new Error(mapCallableError(caught));
+        response = await fetch(`${base}/deepseek`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+          body: JSON.stringify(body),
+        });
+      } catch {
+        throw new Error("DEEPSEEK_REQUEST_FAILED");
       }
+      const parsed = (await response.json().catch(() => null)) as {
+        code?: string;
+        content?: string;
+        model?: string;
+        requestId?: string;
+        usage?: AIProposal["usage"];
+        durationMs?: number;
+      } | null;
+      if (!response.ok || !parsed?.content) throw new Error(parsed?.code ?? "DEEPSEEK_REQUEST_FAILED");
+      result = parsed;
     }
 
     // 两种路径统一兜底：没有正文一律按失败处理
@@ -156,12 +151,9 @@ export async function getDeepSeekStatus(): Promise<AIProviderStatus> {
     if (!response.ok) throw new Error("AI_PROXY_UNAVAILABLE");
     return (await response.json()) as AIProviderStatus;
   }
-  if (!firebaseEnabled || !functions) throw new Error("AI_NOT_CONFIGURED_CLOUD");
-  try {
-    const callable = httpsCallable<Record<string, never>, AIProviderStatus>(functions, "deepseekStatus");
-    const response = await callable();
-    return response.data;
-  } catch (caught) {
-    throw new Error(mapCallableError(caught));
-  }
+  const base = import.meta.env.VITE_AI_PROXY_URL as string | undefined;
+  if (!firebaseEnabled || !base) throw new Error("AI_NOT_CONFIGURED_CLOUD");
+  const response = await fetch(`${base}/status`).catch(() => null);
+  if (!response || !response.ok) throw new Error("AI_PROXY_UNAVAILABLE");
+  return (await response.json()) as AIProviderStatus;
 }
