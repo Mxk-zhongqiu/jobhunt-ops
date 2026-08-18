@@ -18,6 +18,8 @@
 | 项目 | `/projects` | 项目1 多因子、项目2 配对交易/ML 的里程碑看板 |
 | 知识 | `/knowledge` | 数学/统计、编程、金融量化、机器学习、面试准备的主题进度 |
 | 面试记录 | `/interviews` | 每场笔试/面试的问题与复盘，30 分钟内记录 |
+| AI 助手 | `/ai` | 知识问答 / 面试复盘草稿 / 简历要点翻译（Mock 或 DeepSeek） |
+| 数据管理 | `/data` | 导出 JSON 全量备份、导出投递 CSV、导入恢复、重置种子 |
 
 ## 数据模型（src/types/domain.ts）
 
@@ -33,14 +35,23 @@
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173
+npm run dev        # 仅前端：http://localhost:5173
+npm run dev:full   # 前端 + DeepSeek 本地代理（一条命令）
+npm run ai:proxy   # 只启动代理（127.0.0.1:8787）
 ```
 
-## 构建
+## 构建与验证
 
 ```bash
-npm run build    # tsc -b && vite build，产物在 dist/
+npm run build      # tsc -b && vite build，产物在 dist/
+npm run verify     # AI 安全代码级验收（密钥只在服务端 / 最小上下文 / 确认写入）
 ```
+
+## AI 助手
+
+- 三种能力：**知识问答**（不写入）、**面试复盘草稿**（确认后写入面试记录的复盘字段）、**简历要点翻译**（经历 → 量化岗语言，可复制）；
+- 默认使用 Mock 本地规则（不访问网络）；配置真实 DeepSeek 只需在项目根目录 `.env` 填 `DEEPSEEK_API_KEY`（参照 `.env.example`），再 `npm run dev:full`；
+- 安全模型与旧项目一致：密钥只在本地服务端、浏览器只发送勾选的最小上下文、生成一律是草稿、写入必须确认、调用日志不含正文。
 
 ## 技术栈
 
@@ -52,8 +63,8 @@ React 19 · TypeScript(strict) · Vite 6 · React Router 7 · lucide-react · �
 
 ## 路线图（按需追加）
 
-- [ ] 投递数据导入/导出（JSON/CSV）
+- [x] 投递数据导入/导出（JSON 备份 + CSV）
+- [x] AI 辅助（复用旧项目 DeepSeek 安全代理：问答 / 面试复盘 / 简历翻译）
 - [ ] 状态变化时间线（投递→笔试→面试的耗时统计）
 - [ ] 高频面试题文档沉淀（从 InterviewLog 自动汇总）
 - [ ] 简历版本管理
-- [ ] AI 辅助（复用旧项目 DeepSeek 安全代理：面试复盘草稿、知识问答）

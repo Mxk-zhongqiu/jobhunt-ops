@@ -203,6 +203,7 @@ export function createSeedState(): AppState {
       startDate: "2026-08-18",
       dailySubmitTarget: 5,
       totalTarget: 100,
+      aiProvider: "mock",
     },
   };
 }

@@ -94,6 +94,8 @@ export interface AppSettings {
   dailySubmitTarget: number;
   /** 总投递目标 */
   totalTarget: number;
+  /** AI 提供商：本地规则 / 真实 DeepSeek（经本地安全代理） */
+  aiProvider: "mock" | "deepseek";
 }
 
 export interface AppState {

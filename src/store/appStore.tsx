@@ -19,6 +19,7 @@ type AppAction =
   | { type: "update-application"; id: string; patch: Partial<Application> }
   | { type: "remove-application"; id: string }
   | { type: "add-interview"; interview: InterviewLog }
+  | { type: "update-interview"; id: string; patch: Partial<InterviewLog> }
   | { type: "remove-interview"; id: string }
   | { type: "toggle-plan-task"; week: number; taskId: string }
   | { type: "add-plan-task"; week: number; text: string }
@@ -26,7 +27,8 @@ type AppAction =
   | { type: "set-project-status"; id: string; status: QuantProject["status"] }
   | { type: "toggle-milestone"; projectId: string; milestoneId: string }
   | { type: "set-topic-status"; id: string; status: TopicStatus }
-  | { type: "set-settings"; patch: Partial<AppSettings> };
+  | { type: "set-settings"; patch: Partial<AppSettings> }
+  | { type: "replace-state"; state: AppState };
 
 function mergeState(seed: AppState, stored: Partial<AppState> | null): AppState {
   if (!stored) return seed;
@@ -66,6 +68,11 @@ function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, applications: state.applications.filter((item) => item.id !== action.id) };
     case "add-interview":
       return { ...state, interviews: [action.interview, ...state.interviews] };
+    case "update-interview":
+      return {
+        ...state,
+        interviews: state.interviews.map((item) => (item.id === action.id ? { ...item, ...action.patch } : item)),
+      };
     case "remove-interview":
       return { ...state, interviews: state.interviews.filter((item) => item.id !== action.id) };
     case "toggle-plan-task":
@@ -115,6 +122,8 @@ function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, knowledge: state.knowledge.map((item) => (item.id === action.id ? { ...item, status: action.status } : item)) };
     case "set-settings":
       return { ...state, settings: { ...state.settings, ...action.patch } };
+    case "replace-state":
+      return action.state;
     default:
       return state;
   }
@@ -125,6 +134,7 @@ export interface AppStoreValue extends AppState {
   updateApplication: (id: string, patch: Partial<Application>) => void;
   removeApplication: (id: string) => void;
   addInterview: (input: Omit<InterviewLog, "id" | "createdAt">) => void;
+  updateInterview: (id: string, patch: Partial<InterviewLog>) => void;
   removeInterview: (id: string) => void;
   togglePlanTask: (week: number, taskId: string) => void;
   addPlanTask: (week: number, text: string) => void;
@@ -133,6 +143,7 @@ export interface AppStoreValue extends AppState {
   toggleMilestone: (projectId: string, milestoneId: string) => void;
   setTopicStatus: (id: string, status: TopicStatus) => void;
   setSettings: (patch: Partial<AppSettings>) => void;
+  restoreState: (state: AppState) => void;
 }
 
 const AppStoreContext = createContext<AppStoreValue | null>(null);
@@ -169,6 +180,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         type: "add-interview",
         interview: { ...input, id: `interview-${Date.now()}`, createdAt: new Date().toISOString() },
       }),
+    updateInterview: (id, patch) => dispatch({ type: "update-interview", id, patch }),
     removeInterview: (id) => dispatch({ type: "remove-interview", id }),
     togglePlanTask: (week, taskId) => dispatch({ type: "toggle-plan-task", week, taskId }),
     addPlanTask: (week, text) => dispatch({ type: "add-plan-task", week, text }),
@@ -177,6 +189,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     toggleMilestone: (projectId, milestoneId) => dispatch({ type: "toggle-milestone", projectId, milestoneId }),
     setTopicStatus: (id, status) => dispatch({ type: "set-topic-status", id, status }),
     setSettings: (patch) => dispatch({ type: "set-settings", patch }),
+    restoreState: (nextState) => dispatch({ type: "replace-state", state: nextState }),
   }), [state]);
 
   return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>;

@@ -1,6 +1,8 @@
 import { createBrowserRouter } from "react-router-dom";
 import { App } from "./App";
+import { AIPage } from "../pages/AIPage";
 import { ApplicationsPage } from "../pages/ApplicationsPage";
+import { DataPage } from "../pages/DataPage";
 import { InterviewsPage } from "../pages/InterviewsPage";
 import { KnowledgePage } from "../pages/KnowledgePage";
 import { OverviewPage } from "../pages/OverviewPage";
@@ -18,6 +20,8 @@ export const router = createBrowserRouter([
       { path: "projects", element: <ProjectsPage /> },
       { path: "knowledge", element: <KnowledgePage /> },
       { path: "interviews", element: <InterviewsPage /> },
+      { path: "ai", element: <AIPage /> },
+      { path: "data", element: <DataPage /> },
       { path: "*", element: <OverviewPage /> },
     ],
   },
