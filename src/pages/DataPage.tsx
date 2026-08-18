@@ -14,6 +14,7 @@ export function DataPage() {
     projects: store.projects,
     knowledge: store.knowledge,
     settings: store.settings,
+    questionBankMastered: store.questionBankMastered,
   };
   const { applications, restoreState } = store;
   const [pendingImport, setPendingImport] = useState<AppState | null>(null);
@@ -87,7 +88,7 @@ export function DataPage() {
         </div>
         {pendingImport ? (
           <div className="import-preview">
-            <p><strong>待导入内容：</strong>{pendingImport.applications.length} 家投递 · {pendingImport.interviews.length} 条面试记录 · {pendingImport.weeklyPlans.length} 周计划 · {pendingImport.projects.length} 个项目 · {pendingImport.knowledge.length} 个知识主题</p>
+            <p><strong>待导入内容：</strong>{pendingImport.applications.length} 家投递 · {pendingImport.interviews.length} 条面试记录 · {pendingImport.weeklyPlans.length} 周计划 · {pendingImport.projects.length} 个项目 · {pendingImport.knowledge.length} 个知识主题 · {(pendingImport.questionBankMastered ?? []).length} 个已掌握标记</p>
             <div className="data-actions">
               <button type="button" className="primary" onClick={confirmImport}><FileJson size={16} /> 确认导入（覆盖）</button>
               <button type="button" className="soft" onClick={() => setPendingImport(null)}>取消</button>

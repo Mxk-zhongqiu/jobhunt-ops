@@ -205,5 +205,6 @@ export function createSeedState(): AppState {
       totalTarget: 100,
       aiProvider: "mock",
     },
+    questionBankMastered: [],
   };
 }

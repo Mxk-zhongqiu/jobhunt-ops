@@ -59,17 +59,18 @@ F:\jobhunt-ops\
     ├── main.tsx                # React 挂载
     ├── app/
     │   ├── App.tsx             # AppDataProvider + AppShell + Outlet
-    │   └── router.tsx          # 8 条路由（见 §6）
+    │   └── router.tsx          # 9 条路由（见 §6）
     ├── components/
-    │   ├── layout/AppShell.tsx # 侧边栏(8项) + 顶栏 + 当前周徽章
+    │   ├── layout/AppShell.tsx # 侧边栏(9项) + 顶栏 + 当前周徽章
     │   └── ai/AIWorkspace.tsx  # ★ AI 助手（能力/上下文授权/草稿确认）
-    ├── pages/                  # 8 个页面（见 §6）
+    ├── pages/                  # 9 个页面（见 §6）
     │   ├── OverviewPage.tsx
     │   ├── ApplicationsPage.tsx
     │   ├── PlanPage.tsx
     │   ├── ProjectsPage.tsx
     │   ├── KnowledgePage.tsx
     │   ├── InterviewsPage.tsx
+    │   ├── QuestionBankPage.tsx
     │   ├── AIPage.tsx
     │   └── DataPage.tsx
     ├── data/seed.ts            # ★ 种子数据（真实初始清单）
@@ -83,7 +84,8 @@ F:\jobhunt-ops\
     │   ├── domain.ts           # ★ 数据契约（见 §4）
     │   └── ai.ts               # AI 契约（见 §7）
     ├── utils/io.ts             # 下载/CSV/备份校验
-    └── styles/globals.css      # 全部样式（含 AI 工作区、数据管理页）
+    ├── utils/questionBank.ts   # 面试题库汇总（拆分/规范化去重/频率排序/Markdown 生成）
+    └── styles/globals.css      # 全部样式（含 AI 工作区、数据管理页、面试题库）
 ```
 
 ---
@@ -101,7 +103,7 @@ F:\jobhunt-ops\
 | `ProjectMilestone` 里程碑 | title, status(pending/active/done), targetDate | |
 | `KnowledgeTopic` 知识主题 | category(数学/统计、编程、金融与量化、机器学习、面试准备), name, priority(高频/必考/加分), status(未开始/学习中/已掌握) | |
 | `AppSettings` 设置 | targetName, **startDate**(周次基准), dailySubmitTarget, totalTarget, **aiProvider**(mock/deepseek) | |
-| `AppState` 总状态 | 以上全部集合 | 整个对象被序列化持久化 |
+| `AppState` 总状态 | 以上全部集合 + `questionBankMastered`(string[]，已掌握题目的规范化键) | 整个对象被序列化持久化 |
 
 ### 4.2 投递状态机
 
@@ -142,7 +144,7 @@ F:\jobhunt-ops\
 
 ---
 
-## 6. 功能清单（8 页面）
+## 6. 功能清单（9 页面）
 
 | 路由 | 页面 | 核心功能 |
 |---|---|---|
@@ -152,10 +154,11 @@ F:\jobhunt-ops\
 | `/projects` | 项目 | 项目1（多因子，7 里程碑）、项目2（配对交易/ML，5 里程碑）；里程碑勾选、进度、交付链接 |
 | `/knowledge` | 知识 | 5 分类分组 + 优先级徽章 + 三态进度；顶部统计 |
 | `/interviews` | 面试记录 | 记录表单（公司/轮次/日期/问题/复盘）+ 卡片列表 |
+| `/question-bank` | 面试题库 | 从面试记录自动汇总去重（每题一行），按出现次数排序，高频(≥2次)标记，勾选已掌握（持久化），导出 Markdown 背诵文档 |
 | `/ai` | AI 助手 | 见 §7 |
 | `/data` | 数据管理 | JSON 全量导出 / 投递 CSV 导出（带 BOM）/ 文件导入（校验+预览+覆盖）/ 重置种子 |
 
-侧边栏 8 项导航，顶栏显示当前页标题与日期；无独立设置页，`targetName/startDate/投递目标` 改 `seed.ts` 的 `settings`（或后续加设置页）。
+侧边栏 9 项导航，顶栏显示当前页标题与日期；无独立设置页，`targetName/startDate/投递目标` 改 `seed.ts` 的 `settings`（或后续加设置页）。
 
 ---
 
@@ -257,11 +260,11 @@ npm run verify       # ★ AI 安全门禁 17 项（改动 AI 相关后必跑）
 
 ## 11. 路线图与下一步
 
-已交付：MVP 底座（8 页面+持久化）→ 数据导入导出 → AI 助手（问答/复盘/简历翻译）。
+已交付：MVP 底座（8 页面+持久化）→ 数据导入导出 → AI 助手（问答/复盘/简历翻译）→ 高频面试题库自动汇总（`/question-bank`，从 `InterviewLog.questions` 每题一行汇总去重、按频率排序、标记已掌握、导出 Markdown；复盘正文为自由文本不参与解析）。
 
 待办（按价值排序）：
 
-- [ ] **高频面试题库自动汇总**（最高优先）：从 `InterviewLog.questions` + AI 复盘草稿汇总去重，生成可背诵的题库文档（可导出 Markdown）；
+- [x] **高频面试题库自动汇总**（已完成）：从 `InterviewLog.questions` 汇总去重，生成可背诵的题库文档（可导出 Markdown）；
 - [ ] 投递状态变化时间线：记录每次状态变更时间，统计各阶段耗时；
 - [ ] 简历版本管理：版本化保存简历要点与投递版本映射；
 - [ ] CSV 导入（从 Excel 批量录入投递）；

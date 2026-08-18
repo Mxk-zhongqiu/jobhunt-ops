@@ -1,4 +1,4 @@
-import { BookOpen, Bot, CalendarCheck, FolderKanban, HardDriveDownload, LayoutDashboard, MessageSquareText, Send, type LucideIcon } from "lucide-react";
+import { BookOpen, Bot, CalendarCheck, FolderKanban, HardDriveDownload, LayoutDashboard, ListChecks, MessageSquareText, Send, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { currentWeek, useAppData } from "../../store/appStore";
@@ -16,6 +16,7 @@ const navItems: NavItem[] = [
   { path: "/projects", label: "项目", icon: FolderKanban },
   { path: "/knowledge", label: "知识", icon: BookOpen },
   { path: "/interviews", label: "面试记录", icon: MessageSquareText },
+  { path: "/question-bank", label: "面试题库", icon: ListChecks },
   { path: "/ai", label: "AI 助手", icon: Bot },
   { path: "/data", label: "数据管理", icon: HardDriveDownload },
 ];

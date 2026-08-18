@@ -28,6 +28,7 @@ type AppAction =
   | { type: "toggle-milestone"; projectId: string; milestoneId: string }
   | { type: "set-topic-status"; id: string; status: TopicStatus }
   | { type: "set-settings"; patch: Partial<AppSettings> }
+  | { type: "toggle-question-mastered"; key: string }
   | { type: "replace-state"; state: AppState };
 
 function mergeState(seed: AppState, stored: Partial<AppState> | null): AppState {
@@ -39,6 +40,7 @@ function mergeState(seed: AppState, stored: Partial<AppState> | null): AppState 
     projects: stored.projects ?? seed.projects,
     knowledge: stored.knowledge ?? seed.knowledge,
     settings: { ...seed.settings, ...stored.settings },
+    questionBankMastered: stored.questionBankMastered ?? seed.questionBankMastered,
   };
 }
 
@@ -122,8 +124,16 @@ function reducer(state: AppState, action: AppAction): AppState {
       return { ...state, knowledge: state.knowledge.map((item) => (item.id === action.id ? { ...item, status: action.status } : item)) };
     case "set-settings":
       return { ...state, settings: { ...state.settings, ...action.patch } };
+    case "toggle-question-mastered":
+      return {
+        ...state,
+        questionBankMastered: state.questionBankMastered.includes(action.key)
+          ? state.questionBankMastered.filter((key) => key !== action.key)
+          : [...state.questionBankMastered, action.key],
+      };
     case "replace-state":
-      return action.state;
+      // 兼容旧备份：导入/重置的数据若缺新字段则兜底为空数组
+      return { ...action.state, questionBankMastered: action.state.questionBankMastered ?? [] };
     default:
       return state;
   }
@@ -143,6 +153,7 @@ export interface AppStoreValue extends AppState {
   toggleMilestone: (projectId: string, milestoneId: string) => void;
   setTopicStatus: (id: string, status: TopicStatus) => void;
   setSettings: (patch: Partial<AppSettings>) => void;
+  toggleQuestionMastered: (key: string) => void;
   restoreState: (state: AppState) => void;
 }
 
@@ -189,6 +200,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     toggleMilestone: (projectId, milestoneId) => dispatch({ type: "toggle-milestone", projectId, milestoneId }),
     setTopicStatus: (id, status) => dispatch({ type: "set-topic-status", id, status }),
     setSettings: (patch) => dispatch({ type: "set-settings", patch }),
+    toggleQuestionMastered: (key) => dispatch({ type: "toggle-question-mastered", key }),
     restoreState: (nextState) => dispatch({ type: "replace-state", state: nextState }),
   }), [state]);
 

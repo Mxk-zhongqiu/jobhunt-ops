@@ -105,4 +105,6 @@ export interface AppState {
   projects: QuantProject[];
   knowledge: KnowledgeTopic[];
   settings: AppSettings;
+  /** 面试题库中已标记"已掌握"的题目（存规范化键，见 utils/questionBank.ts） */
+  questionBankMastered: string[];
 }

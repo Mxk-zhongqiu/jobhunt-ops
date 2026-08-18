@@ -20,6 +20,7 @@
 | 项目 | `/projects` | 项目1 多因子、项目2 配对交易/ML 的里程碑看板 |
 | 知识 | `/knowledge` | 数学/统计、编程、金融量化、机器学习、面试准备的主题进度 |
 | 面试记录 | `/interviews` | 每场笔试/面试的问题与复盘，30 分钟内记录 |
+| 面试题库 | `/question-bank` | 从面试记录自动汇总去重、按频率排序、标记已掌握、导出 Markdown 背诵文档 |
 | AI 助手 | `/ai` | 知识问答 / 面试复盘草稿 / 简历要点翻译（Mock 或 DeepSeek） |
 | 数据管理 | `/data` | 导出 JSON 全量备份、导出投递 CSV、导入恢复、重置种子 |
 
@@ -70,5 +71,5 @@ React 19 · TypeScript(strict) · Vite 6 · React Router 7 · lucide-react · �
 - [x] 投递数据导入/导出（JSON 备份 + CSV）
 - [x] AI 辅助（复用旧项目 DeepSeek 安全代理：问答 / 面试复盘 / 简历翻译）
 - [ ] 状态变化时间线（投递→笔试→面试的耗时统计）
-- [ ] 高频面试题文档沉淀（从 InterviewLog 自动汇总）
+- [x] 高频面试题文档沉淀（从 InterviewLog 自动汇总）
 - [ ] 简历版本管理

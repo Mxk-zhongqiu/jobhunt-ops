@@ -8,6 +8,7 @@ import { KnowledgePage } from "../pages/KnowledgePage";
 import { OverviewPage } from "../pages/OverviewPage";
 import { PlanPage } from "../pages/PlanPage";
 import { ProjectsPage } from "../pages/ProjectsPage";
+import { QuestionBankPage } from "../pages/QuestionBankPage";
 
 export const router = createBrowserRouter([
   {
@@ -20,6 +21,7 @@ export const router = createBrowserRouter([
       { path: "projects", element: <ProjectsPage /> },
       { path: "knowledge", element: <KnowledgePage /> },
       { path: "interviews", element: <InterviewsPage /> },
+      { path: "question-bank", element: <QuestionBankPage /> },
       { path: "ai", element: <AIPage /> },
       { path: "data", element: <DataPage /> },
       { path: "*", element: <OverviewPage /> },

@@ -334,3 +334,34 @@ button.danger:hover { background: var(--red); color: #fff; }
   .ai-layout { grid-template-columns: 1fr; }
   .ai-capability-grid { grid-template-columns: 1fr; }
 }
+
+/* ─── 面试题库 ─── */
+.stat-card .progress-line { margin-top: 6px; }
+.bank-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.bank-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.bank-tabs button {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 999px;
+  padding: 6px 12px; cursor: pointer; font-size: 12px; color: var(--muted);
+}
+.bank-tabs button b { font-size: 11px; background: var(--bg); border-radius: 999px; padding: 0 6px; line-height: 16px; }
+.bank-tabs button.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.bank-tabs button.active b { background: var(--accent); color: #fff; }
+.bank-toolbar-right { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.bank-list { display: flex; flex-direction: column; gap: 8px; }
+.bank-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 8px; background: var(--bg); }
+.bank-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.bank-question { font-size: 13px; line-height: 1.55; font-weight: 600; }
+.bank-row.mastered .bank-question { color: var(--muted); text-decoration: line-through; }
+.bank-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bank-sources { font-size: 11px; color: var(--muted); }
+.bank-toggle {
+  width: 18px; height: 18px; border-radius: 5px; border: 2px solid #b8c2bb;
+  background: #fff; cursor: pointer; flex-shrink: 0; padding: 0; margin-top: 2px; position: relative;
+}
+.bank-toggle.done { background: var(--accent); border-color: var(--accent); }
+.bank-toggle.done::after {
+  content: ""; position: absolute; left: 5px; top: 1px; width: 4px; height: 9px;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
