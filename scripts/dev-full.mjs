@@ -1,11 +1,14 @@
 /* global console, process */
 // 一条命令同时启动：DeepSeek 本地代理 + Vite 开发服务器
+// 支持透传 vite 参数，例如：node scripts/dev-full.mjs --port 8789
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 
+const viteArgs = process.argv.slice(2);
+
 const processes = [
   spawn(process.execPath, [resolve("server/deepseek-proxy.mjs")], { stdio: "inherit" }),
-  spawn(process.execPath, [resolve("node_modules/vite/bin/vite.js")], { stdio: "inherit" }),
+  spawn(process.execPath, [resolve("node_modules/vite/bin/vite.js"), ...viteArgs], { stdio: "inherit" }),
 ];
 
 function stop() {

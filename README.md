@@ -35,10 +35,12 @@
 
 ```bash
 npm install
-npm run dev        # 仅前端：http://localhost:5173
-npm run dev:full   # 前端 + DeepSeek 本地代理（一条命令）
+npm run dev        # 仅前端：http://127.0.0.1:8788
+npm run dev:full   # 前端 + DeepSeek 本地代理（一条命令，推荐）
 npm run ai:proxy   # 只启动代理（127.0.0.1:8787）
 ```
+
+> 端口说明：开发服务器使用 **8788**（AI 代理 8787 的相邻端口）。默认的 5173 在本机落在 Windows 保留端口段（Hyper-V 保留 5141–5240）内，绑定会报 `EACCES`。若 8788 也被占用，可换端口：`npm run dev:full -- --port 8789`。
 
 ## 构建与验证
 
