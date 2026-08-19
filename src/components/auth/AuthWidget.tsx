@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { CloudOff, LogIn, LogOut, UploadCloud } from "lucide-react";
 import { mapAuthError } from "../../services/firebase";
 import { useAppData } from "../../store/appStore";
@@ -71,7 +72,9 @@ export function AuthWidget() {
         <button type="button" className="soft small" onClick={() => setOpen(true)}><LogIn size={14} /> 登录 / 注册</button>
       )}
 
-      {open ? (
+      {/* Portal 渲染到 body：顶栏的 backdrop-filter 会劫持 fixed 定位的包含块，
+          不 portal 的话遮罩只会盖住顶栏区域、弹窗无法居中（桌面/手机同样问题） */}
+      {open ? createPortal(
         <div className="auth-overlay" onClick={() => setOpen(false)}>
           <form className="auth-card" onClick={(event) => event.stopPropagation()} onSubmit={submit}>
             <h3>{mode === "login" ? "登录" : "注册账号"}</h3>
@@ -98,7 +101,8 @@ export function AuthWidget() {
               <button type="submit" className="primary" disabled={busy}>{busy ? "处理中…" : mode === "login" ? "登录" : "注册并登录"}</button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </div>
   );
