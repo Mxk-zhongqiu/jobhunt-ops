@@ -390,12 +390,17 @@ button.danger:hover { background: var(--red); color: #fff; }
   background: rgba(15, 23, 18, 0.45);
   display: flex; align-items: center; justify-content: center;
   padding: 16px;
+  overflow-y: auto;
 }
 .auth-card {
   width: 100%; max-width: 360px;
   background: var(--panel); border-radius: 12px; border: 1px solid var(--border);
   padding: 20px; display: flex; flex-direction: column; gap: 12px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+  /* flex 安全居中：卡片高于视口时也不会被裁掉顶部 */
+  margin: auto;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
 }
 .auth-card h3 { font-size: 16px; }
 .auth-hint { margin: 0; font-size: 12px; color: var(--muted); }
@@ -430,6 +435,7 @@ button.danger:hover { background: var(--red); color: #fff; }
   .topbar p { font-size: 11px; }
   .topbar-target { display: none; }
   .auth-email { display: none; }
+  .auth-card { padding: 16px; gap: 10px; }
   /* 页面容器 */
   .page-content { padding: 12px 12px 44px; }
   .page { max-width: 100%; }
