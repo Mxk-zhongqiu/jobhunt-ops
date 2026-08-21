@@ -23,7 +23,7 @@ const navItems: NavItem[] = [
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { settings, user } = useAppData();
+  const { settings, user, previewDemo, togglePreviewDemo } = useAppData();
   const location = useLocation();
   const week = currentWeek(settings);
   const currentLabel = navItems.find((item) => item.path === location.pathname)?.label ?? "作战总览";
@@ -64,9 +64,20 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
           <div className="topbar-right">
             <div className="topbar-target">总目标 {settings.totalTarget} 家 · 每日 {settings.dailySubmitTarget} 家</div>
+            <button
+              type="button"
+              className={`demo-btn${previewDemo ? " active" : ""}`}
+              onClick={togglePreviewDemo}
+              title={previewDemo ? "退出演示，恢复你的真实数据" : "游客预览：切换为演示数据（用于截图展示，不写入本地与云端）"}
+            >
+              {previewDemo ? "退出演示" : "演示预览"}
+            </button>
             <AuthWidget />
           </div>
         </header>
+        {previewDemo && (
+          <div className="demo-banner">⚠️ 演示预览中：当前展示虚构演示数据，仅供截图/展示，操作不写入本地与云端</div>
+        )}
         <div className="page-content">{children}</div>
       </main>
     </div>

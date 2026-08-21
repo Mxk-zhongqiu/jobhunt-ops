@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { createSeedState } from "../data/seed";
+import { createDemoState } from "../data/demoSeed";
 import { db, firebaseEnabled, loginUser, logoutUser, registerUser, subscribeAuth, type SyncUser } from "../services/firebase";
 import { isAppState } from "../utils/io";
 import type {
@@ -172,15 +173,23 @@ export interface AppStoreValue extends AppState {
   logout: () => Promise<void>;
   /** 把本机当前数据上传到云端，开始跨设备同步 */
   uploadLocalToCloud: () => Promise<void>;
+  /** 游客预览模式：界面切换为演示数据（用于截图/展示，不写入本地与云端） */
+  previewDemo: boolean;
+  togglePreviewDemo: () => void;
 }
 
 const AppStoreContext = createContext<AppStoreValue | null>(null);
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, undefined, loadState);
+  const [realState, dispatch] = useReducer(reducer, undefined, loadState);
   const [user, setUser] = useState<SyncUser | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(firebaseEnabled ? "local" : "unsupported");
   const [cloudEmpty, setCloudEmpty] = useState(false);
+  // 游客预览模式：界面切换为演示数据（用于截图/展示）。演示数据是独立内存态，
+  // 绝不写入 localStorage 或云端；切换回真实模式即恢复本人真实数据。
+  const [previewDemo, setPreviewDemo] = useState(false);
+  const [demoState] = useState<AppState>(() => createDemoState());
+  const state = previewDemo ? demoState : realState;
   // 上一次"来自云端"的状态 JSON：云端快照与它一致时视为回显，不再覆盖本地，避免同步死循环
   const lastRemoteJson = useRef<string | null>(null);
 
@@ -228,33 +237,35 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   // 真实持久化：任何状态变化立即写入本地存储（本地备份层，始终保留）
+  // ⚠️ 游客预览模式不写：演示数据绝不污染本人真实数据
   useEffect(() => {
+    if (previewDemo) return;
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(realState));
     } catch {
       // 存储失败不阻断使用（例如隐私模式）
     }
-  }, [state]);
+  }, [realState, previewDemo]);
 
-  // 云端同步：登录后防抖上传；状态来自云端（回显一致）时不写回
+  // 云端同步：登录后防抖上传；状态来自云端（回显一致）时不写回；游客预览模式不上传
   useEffect(() => {
-    if (!user || !db || cloudEmpty) return;
-    if (lastRemoteJson.current !== null && JSON.stringify(state) === lastRemoteJson.current) return;
+    if (previewDemo || !user || !db || cloudEmpty) return;
+    if (lastRemoteJson.current !== null && JSON.stringify(realState) === lastRemoteJson.current) return;
     setSyncStatus("syncing");
     const docRef = doc(db, "states", user.uid);
     const timer = setTimeout(() => {
-      setDoc(docRef, { data: state, updatedAt: serverTimestamp() }, { merge: true })
+      setDoc(docRef, { data: realState, updatedAt: serverTimestamp() }, { merge: true })
         .then(() => setSyncStatus("synced"))
         .catch(() => setSyncStatus("error"));
     }, 600);
     return () => clearTimeout(timer);
-  }, [state, user, cloudEmpty]);
+  }, [realState, user, cloudEmpty, previewDemo]);
 
   const uploadLocalToCloud = async () => {
     if (!user || !db) return;
     setCloudEmpty(false);
     setSyncStatus("syncing");
-    await setDoc(doc(db, "states", user.uid), { data: state, updatedAt: serverTimestamp() }, { merge: true });
+    await setDoc(doc(db, "states", user.uid), { data: realState, updatedAt: serverTimestamp() }, { merge: true });
     setSyncStatus("synced");
   };
 
@@ -292,11 +303,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     user,
     syncStatus,
     cloudEmpty,
+    previewDemo,
+    togglePreviewDemo: () => setPreviewDemo((v) => !v),
     register: (email, password) => registerUser(email, password).then(() => undefined),
     login: (email, password) => loginUser(email, password).then(() => undefined),
     logout: () => logoutUser(),
     uploadLocalToCloud,
-  }), [state, user, syncStatus, cloudEmpty]);
+  }), [state, user, syncStatus, cloudEmpty, previewDemo]);
 
   return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>;
 }
