@@ -11,6 +11,7 @@
     "build:demo": "tsc -b && vite build --mode demo && node scripts/verify-seed.mjs --expect-demo",
     "deploy": "npm run build && firebase deploy --only hosting,firestore:rules",
     "preview": "vite preview",
+    "browser:smoke": "node scripts/browser/smoke-test.mjs",
     "verify": "node scripts/verify-ai.mjs",
     "verify:seed:real": "node scripts/verify-seed.mjs --expect-real",
     "verify:seed:demo": "node scripts/verify-seed.mjs --expect-demo"
@@ -28,6 +29,7 @@
     "@types/react": "^19.0.4",
     "@types/react-dom": "^19.0.2",
     "@vitejs/plugin-react": "^4.3.4",
+    "playwright": "^1.62.1",
     "typescript": "^5.7.2",
     "vite": "^6.0.7"
   }

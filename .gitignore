@@ -11,3 +11,4 @@ dist
 .firebase
 firebase-debug.log
 .firebaserc
+.edge-profile

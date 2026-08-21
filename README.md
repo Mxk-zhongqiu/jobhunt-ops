@@ -81,6 +81,10 @@ npm run verify:seed:demo   # 检查当前 dist 是演示包且不含真实数据
 
 React 19 · TypeScript(strict) · Vite 6 · React Router 7 · lucide-react · 原生 CSS（无 UI 框架依赖，轻量可改）
 
+## 浏览器自动化（Playwright + Edge）
+
+已内置用 Playwright 驱动本机 Edge 的通道：自动打开投递链接、抓取招聘页面、定时检查笔试/面试入口等。详见 [`docs/BROWSER_AUTOMATION.md`](docs/BROWSER_AUTOMATION.md)，快速验证：`npm run browser:smoke`。
+
 ## 与旧项目（F:\MyWorld）的关系
 
 旧项目《自由世界成长系统》是"低维护生活观测"框架（Mock 数据、不持久化、六现实领域），与真实求职场景错位，故本仓库从头构建，仅复用其工程模式（repository/selector、验证门禁思想）与组件审美。旧仓库保持原样归档。
