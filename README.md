@@ -23,7 +23,6 @@
 | 面试题库 | `/question-bank` | 从面试记录自动汇总去重、按频率排序、标记已掌握、导出 Markdown 背诵文档 |
 | AI 助手 | `/ai` | 知识问答 / 面试复盘草稿 / 简历要点翻译（Mock 或 DeepSeek） |
 | 数据管理 | `/data` | 导出 JSON 全量备份、导出投递 CSV、导入恢复、重置种子 |
-
 > **游客预览模式**：顶栏"演示预览"按钮一键切换为虚构演示数据（用于截图/内容展示，如小红书），演示数据为独立内存态、**不写入本地与云端**，退出即恢复真实数据。
 
 ## 数据模型（src/types/domain.ts）
@@ -35,6 +34,14 @@
 - `InterviewLog`：轮次、问题、复盘。
 
 **持久化**：所有数据实时写入浏览器 localStorage（键 `jobhunt-ops-state-v1`），刷新不丢失。种子数据来自《求职规划内部文档》，可直接修改。
+
+## 数据更新（唯一入口）
+
+**所有个人数据的增删改统一走标准化入口**：见 [`docs/DATA_UPDATE_SOP.md`](docs/DATA_UPDATE_SOP.md)（标准作业文件）。
+
+- 一条命令流程：`npm run state:export` → `state:backup` → 编辑 `.edge-profile/state.json` → `state:validate` → `state:apply`（自动备份 + 导入 + 验证）；
+- 规范状态文件 `.edge-profile/state.json`（真实数据，gitignored，不入库）；备份在 `.edge-profile/backups/`；
+- 你只需一句话描述需求（"新增 XX 公司投递 / 幻方状态改笔试 / 录入面经…"），执行者按 SOP 完成，详见文档 §6 速查表。
 
 ## 启动
 
@@ -50,28 +57,28 @@ npm run ai:proxy   # 只启动代理（127.0.0.1:8787）
 ## 构建与验证
 
 ```bash
-npm run build        # 真实版：tsc -b && vite build，产物在 dist/（真实种子数据）
-npm run build:demo   # 公网展示版：虚构演示数据 + 仅 Mock AI，构建末尾自动检查无真实数据泄漏
+npm run build        # 生产构建：真实数据 + 云同步 + 云端 AI，产物在 dist/（公网即真实工具）
+npm run build:demo   # 与 build 相同（--mode demo 已无差异），保留作兼容别名
 npm run verify       # AI 安全代码级验收（密钥只在服务端 / 最小上下文 / 确认写入）
-npm run verify:seed:real   # 检查当前 dist 是真实包且不含演示数据
-npm run verify:seed:demo   # 检查当前 dist 是演示包且不含真实数据
 ```
 
-## 公网展示版（部署）
+> 数据策略（2026 改）：公网 = 真实工具测评版，真实种子数据进入所有构建。虚构演示数据仅保留为应用内「游客预览」开关（`appStore.previewDemo`，用于截图/内容展示，不写本地与云端）。
 
-发布为公网网站、任何设备可访问、无需电脑开机：见 [`docs/DEPLOY.md`](docs/DEPLOY.md)（Netlify Drop / Cloudflare Pages 一键部署）。
+## 公网部署
 
-- 展示版 = 完整界面 + **虚构演示数据** + 仅本地 Mock AI；**真实种子数据被构建期隔离门禁拦截，绝不进公网包**；
-- 本地 `npm run dev` / `npm run build` 仍为真实数据 + 真实 DeepSeek（本地代理），互不干扰；
-- 跨设备数据同步（账户 + 云端数据库）属于第二阶段，见 `docs/DEPLOY.md`。
+发布为公网网站、任何设备可访问：见 [`docs/DEPLOY.md`](docs/DEPLOY.md)（Netlify Drop / Cloudflare Pages / Firebase Hosting）。
+
+- 公网版 = 完整真实工具：真实种子数据 + Firebase 登录/云同步 + 云端 AI（Cloudflare Worker，需登录）；
+- 数据安全：Firestore 规则按 uid 隔离（`states/{uid}` 仅本人可读写）；AI 建议配置邮箱白名单（`worker/ai-proxy.js` 的 `AI_ALLOWED_EMAILS`）防止公网账号刷 DeepSeek 额度；
+- 本地 `npm run dev` / `npm run build` 与公网构建相同数据源，互不干扰。
 
 ## 云同步（第二阶段，Firebase）
 
 **邮箱密码注册/登录 → 数据自动同步到云端，手机/电脑登录同一账号即互通**。详细开通步骤见 [`docs/FIREBASE_SETUP.md`](docs/FIREBASE_SETUP.md)。
 
 - 认证：Firebase Auth；数据库：Firestore `states/{uid}`（规则只允许读写自己的文档）；离线缓存：IndexedDB；
-- AI 上云：Cloudflare Worker 代理 DeepSeek（免费计划），**密钥存 Worker 环境变量，浏览器接触不到**（门禁 36 项自动检查），仅登录用户可用；
-- 未登录/未配置：自动退回本地模式（localStorage），与原版行为一致；公网展示版永不连接真实 Firebase。
+- AI 上云：Cloudflare Worker 代理 DeepSeek（免费计划），**密钥存 Worker 环境变量，浏览器接触不到**（门禁 36 项自动检查），仅登录用户可用，建议配置 `AI_ALLOWED_EMAILS` 白名单；
+- 未登录/未配置：自动退回本地模式（localStorage），与原版行为一致。
 
 ## AI 助手
 
