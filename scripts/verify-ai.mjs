@@ -59,6 +59,8 @@ expect("Worker 超时与有限重试", worker.includes("AbortController") && wor
 expect("Worker 仅重试限流和服务端故障", worker.includes("[429, 500, 503]"));
 expect("Worker 不记录上下文正文", !worker.includes("callLogs"));
 expect("Worker 带跨域 CORS 头", worker.includes("Access-Control-Allow-Origin"));
+// 回归：204 预检响应不允许带 body（json(null,204,{}) 会被 Worker 运行时抛 500，导致浏览器预检失败）
+expect("Worker 预检 204 无 body", worker.includes('status: 204') && !worker.includes("json(null, 204"));
 
 const failed = checks.filter((check) => !check.condition);
 if (failed.length) {

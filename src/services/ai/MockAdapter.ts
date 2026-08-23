@@ -1,7 +1,7 @@
 // MockAdapter：本地规则，不访问网络。保证 AI 关闭或未配置密钥时全部能力可用。
 
 import type { AppState } from "../../types/domain";
-import type { AIProposal, AIRequest, AIService } from "../../types/ai";
+import type { AIProposal, AIRequest, AIService, KnowledgeDraftPoint } from "../../types/ai";
 import { buildAIContextSummary } from "./context";
 
 export class MockAdapter implements AIService {
@@ -47,7 +47,26 @@ export class MockAdapter implements AIService {
       };
     }
 
-    const topicText = selectedTopics.length ? `，重点结合你选择的主题：${selectedTopics.map((item) => item.name).join("、")}` : "";
+    if (request.capability === "knowledge") {
+      const selectedTopic = this.state.knowledge.find((item) => request.context.topicIds.includes(item.id));
+      const points: KnowledgeDraftPoint[] = [
+        { title: "核心概念与定义", summary: "（Mock 示例）本主题最常考的定义、公式与适用前提。配置 DEEPSEEK_API_KEY 后将生成真实内容。", depth: "基础" },
+        { title: "关键结论与易错点", summary: "（Mock 示例）面试高频结论与常见陷阱，如边界条件、假设失效场景。", depth: "基础" },
+        { title: "面试延伸与加分项", summary: "（Mock 示例）进阶考点与可结合项目讲述的延伸问题。", depth: "进阶" },
+      ];
+      return {
+        kind: "knowledge" as const,
+        topicName: selectedTopic?.name ?? "（请选择主题）",
+        points,
+      };
+    }
+
+    const topicText = selectedTopics.length
+      ? `，重点结合你选择的主题：${selectedTopics.map((item) => {
+          const points = item.points ?? [];
+          return points.length ? `${item.name}（知识点 ${points.filter((p) => p.mastered).length}/${points.length} 已掌握）` : item.name;
+        }).join("、")}`
+      : "";
     return {
       kind: "answer" as const,
       content: `（Mock 本地规则）基于你授权的 ${request.context.interviewIds.length + request.context.topicIds.length + request.context.applicationIds.length} 项上下文${topicText}。配置 DEEPSEEK_API_KEY 并切换提供商后，将返回真实回答。要求：${request.userInstruction || "（无额外要求）"}`,

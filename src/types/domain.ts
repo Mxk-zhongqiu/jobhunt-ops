@@ -76,6 +76,20 @@ export interface QuantProject {
 export type TopicPriority = "高频" | "必考" | "加分";
 export type TopicStatus = "未开始" | "学习中" | "已掌握";
 
+/** 知识点掌握深度（可选提示：优先学基础，进阶冲刺用） */
+export type PointDepth = "基础" | "进阶";
+
+export interface KnowledgePoint {
+  id: string;
+  /** 知识点名，如「贝叶斯公式」 */
+  title: string;
+  /** 核心要点 1–3 句（公式 / 结论 / 面试答法，纯文本，可用 AI 助手生成） */
+  summary: string;
+  depth?: PointDepth;
+  /** 两态掌握标记：已掌握 ✓ / 未掌握 */
+  mastered: boolean;
+}
+
 export interface KnowledgeTopic {
   id: string;
   category: string;
@@ -83,6 +97,8 @@ export interface KnowledgeTopic {
   priority: TopicPriority;
   status: TopicStatus;
   note?: string;
+  /** 知识点清单（v0.3 新增；旧数据缺省时按 id 从种子回填） */
+  points: KnowledgePoint[];
 }
 
 export interface AppSettings {

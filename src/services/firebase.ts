@@ -1,9 +1,8 @@
 // Firebase 云同步（第二阶段：认证 + Firestore 跨设备同步 + AI 云函数）
 // 安全边界：
 //  - Firebase 的 apiKey 是"公网配置"（Firebase 设计上就随前端下发，不是机密）；
-//  - 真正的机密是 DEEPSEEK_API_KEY——它只存在于云函数环境变量（functions/index.js），浏览器代码永远接触不到；
-//  - 公网展示版（__DEMO_MODE__）与未配置 .env 时整模块禁用，应用完全退化为本地模式（localStorage），
-//    保证展示版永远不会连上真实 Firebase 项目。
+//  - 真正的机密是 DEEPSEEK_API_KEY——它只存在于云端 Worker/本地代理环境变量，浏览器代码永远接触不到；
+//  - 未配置 .env 时整模块禁用，应用完全退化为本地模式（localStorage）。
 
 import { initializeApp, type FirebaseApp } from "firebase/app";
 import {
@@ -21,8 +20,8 @@ import { getFunctions, type Functions } from "firebase/functions";
 const apiKey = import.meta.env.VITE_FIREBASE_API_KEY as string | undefined;
 const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID as string | undefined;
 
-/** 云端能力是否可用：非展示版构建 + .env 已填 Firebase 公网配置 */
-export const firebaseEnabled = !__DEMO_MODE__ && Boolean(apiKey && projectId);
+/** 云端能力是否可用：.env 已填 Firebase 公网配置即启用（公网真实版同样启用） */
+export const firebaseEnabled = Boolean(apiKey && projectId);
 
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;

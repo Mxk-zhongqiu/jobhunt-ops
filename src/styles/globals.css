@@ -231,10 +231,46 @@ button.primary:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* ─── 知识 ─── */
 .topic-grid { display: flex; flex-direction: column; gap: 6px; }
-.topic-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: 8px; background: var(--bg); }
-.topic-name { display: flex; align-items: center; gap: 8px; }
+.topic-item { border: 1px solid var(--border); border-radius: 8px; background: var(--bg); overflow: hidden; }
+.topic-item.open { border-color: var(--accent); background: var(--panel); }
+.topic-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; cursor: pointer; user-select: none; }
+.topic-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .topic-name strong { font-size: 13px; }
+.topic-chevron { color: var(--muted); flex-shrink: 0; }
+.topic-progress { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.topic-row-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.topic-mini-track { width: 64px; height: 5px; background: var(--border); border-radius: 999px; overflow: hidden; display: inline-block; }
+.topic-mini-track i { display: block; height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.2s; }
 .topic-row select { padding: 4px 6px; font-size: 12px; }
+
+.topic-detail { padding: 10px 12px 12px; border-top: 1px dashed var(--border); display: flex; flex-direction: column; gap: 10px; }
+.topic-note { margin: 0; font-size: 12px; color: var(--muted); background: var(--gold-soft); padding: 8px 10px; border-radius: 8px; }
+
+.point-list { display: flex; flex-direction: column; gap: 6px; }
+.point-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: 8px; background: var(--bg); }
+.point-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.point-title-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.point-title { font-size: 13px; }
+.point-row.mastered .point-title { color: var(--muted); text-decoration: line-through; }
+.point-summary { margin: 0; font-size: 12px; color: var(--muted); white-space: pre-wrap; }
+.point-summary.empty-summary { font-style: italic; }
+.point-actions { display: flex; gap: 4px; flex-shrink: 0; }
+button.danger-icon { color: var(--red); }
+button.danger-icon:hover { border-color: var(--red); color: var(--red); background: var(--red-soft); }
+
+.point-edit { flex-direction: column; gap: 8px; background: var(--panel); border: 1px solid var(--accent); padding: 12px; }
+.point-edit input, .point-edit textarea, .point-edit select { font-size: 13px; }
+.add-point-form { border-style: dashed; }
+.inline-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.inline-actions .danger { padding: 4px 10px; font-size: 12px; }
+
+.topic-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.topic-edit-form { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; align-items: end; padding: 12px; background: var(--bg); border-radius: 8px; }
+.add-topic-form { margin-top: 12px; background: var(--accent-soft); }
+
+.knowledge-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.knowledge-search { display: inline-flex; align-items: center; gap: 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; color: var(--muted); }
+.knowledge-search input { border: none; background: none; outline: none; font-size: 13px; padding: 0; min-width: 180px; color: var(--text); }
 
 /* ─── 面试 ─── */
 .interview-form { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; align-items: end; }
@@ -351,6 +387,22 @@ button.danger:hover { background: var(--red); color: #fff; }
 .ai-final.rejected { background: var(--gold-soft); color: var(--gold); }
 .ai-final p { margin: 0; }
 
+/* ─── AI 知识点草稿 ─── */
+.knowledge-draft { display: flex; flex-direction: column; gap: 8px; }
+.knowledge-draft-point { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
+.knowledge-draft-row { display: flex; gap: 8px; align-items: center; }
+.knowledge-draft-row input { flex: 1; min-width: 0; }
+.knowledge-draft-row select { flex-shrink: 0; }
+.write-mode-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.write-mode-toggle button {
+  border: 1px solid var(--border); background: var(--panel); border-radius: 999px;
+  padding: 4px 12px; font-size: 12px; cursor: pointer; color: var(--muted);
+}
+.write-mode-toggle button.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.ai-hint-warn { margin: 0; font-size: 12px; color: var(--gold); background: var(--gold-soft); border: 1px solid #f5d9a8; padding: 7px 10px; border-radius: 8px; }
+.ai-review-actions .ai-hint-warn.full-width { width: 100%; }
+.required-mark { color: var(--red); font-weight: 700; font-size: 11px; }
+
 @media (max-width: 900px) {
   .ai-layout { grid-template-columns: 1fr; }
   .ai-capability-grid { grid-template-columns: 1fr; }
@@ -463,6 +515,9 @@ button.danger:hover { background: var(--red); color: #fff; }
   .week-tabs button { min-width: 0; flex: 1 1 30%; }
   .topic-row { flex-wrap: wrap; }
   .topic-row select { flex-shrink: 0; }
+  .topic-mini-track { display: none; }
+  .topic-edit-form { grid-template-columns: 1fr; }
+  .knowledge-search input { min-width: 120px; }
   .bank-tabs { width: 100%; }
   .stat-card { padding: 10px 12px; }
   .stat-card strong { font-size: 22px; }

@@ -10,7 +10,7 @@
 //  - 只接收显式勾选的最小上下文（客户端已裁剪），并限制上下文/输出规模、超时与有限重试；
 //  - 结构化草稿启用 JSON Output + 中文 JSON 指令；不记录上下文正文。
 
-const maxTokens = 1500;
+const maxTokens = 4000;
 const timeoutMs = 45000;
 const maxContextCharacters = 24000;
 
@@ -35,6 +35,9 @@ function schemaInstruction(capability) {
   }
   if (capability === "resume") {
     return `${shared} 格式：{"kind":"resume","original":"原文","translated":"量化岗语言改写","keywords":["时序建模","状态估计","组合优化"...]}`;
+  }
+  if (capability === "knowledge") {
+    return `${shared} 格式：{"kind":"knowledge","topicName":"目标主题名","points":[{"title":"知识点名","summary":"核心要点，≤2 句（含公式/结论/面试答法）","depth":"基础或进阶，可不填"}]}；生成 6–12 个知识点，覆盖该主题核心考点，结合授权上下文中的已有知识点避免重复；summary 务必精简，控制总输出长度。`;
   }
   return `${shared} 格式：{"kind":"answer","content":"..."}`;
 }
@@ -67,6 +70,15 @@ async function verifyIdToken(idToken, env) {
   } catch {
     return null;
   }
+}
+
+// 邮箱白名单：env.AI_ALLOWED_EMAILS（逗号分隔）。配置后仅列表内账号可用 AI，
+// 防止公网任意注册用户消耗 DeepSeek 额度；未配置则允许所有登录用户（默认）。
+function isAllowedUser(user, env) {
+  const raw = (env.AI_ALLOWED_EMAILS || "").trim();
+  if (!raw) return true;
+  const allowed = raw.split(",").map((email) => email.trim().toLowerCase()).filter(Boolean);
+  return allowed.includes((user.email || "").toLowerCase());
 }
 
 async function callDeepSeek(payload, env) {
@@ -127,8 +139,18 @@ export default {
     const url = new URL(request.url);
 
     // 浏览器跨域预检
+    // ⚠️ 204 响应不允许带 body：旧版预检实现会被 Worker 运行时抛错（500），
+    //    导致浏览器 POST /deepseek 的 OPTIONS 预检失败 → fetch 报 DEEPSEEK_REQUEST_FAILED。
     if (request.method === "OPTIONS") {
-      return json(null, 204, {});
+      return new Response(null, {
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Max-Age": "86400",
+        },
+      });
     }
 
     // 状态检查（无需登录，只暴露"是否已配置"这类无害信息）
@@ -148,6 +170,7 @@ export default {
       const idToken = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
       const user = await verifyIdToken(idToken, env);
       if (!user) return json(null, 401, { code: "AUTH_REQUIRED", message: "请先登录后再使用真实 DeepSeek。" });
+      if (!isAllowedUser(user, env)) return json(null, 403, { code: "FORBIDDEN", message: "该账号未获授权使用 AI。" });
       if (!env.DEEPSEEK_API_KEY) return json(null, 503, { code: "AI_NOT_CONFIGURED", message: "DeepSeek API key is not configured on the cloud worker." });
 
       let payload;
@@ -161,8 +184,11 @@ export default {
       const startedAt = Date.now();
       const result = await callDeepSeek({ ...payload, uid: user.uid }, env);
       if (result.code) return json(null, 502, { code: result.code });
-      const content = result.choices?.[0]?.message?.content;
+      const choice = result.choices?.[0];
+      const content = choice?.message?.content;
       if (!content) return json(null, 502, { code: "EMPTY_RESPONSE" });
+      // 输出达到 max_tokens 上限被截断：JSON 必然不完整，直接报明确错误
+      if (choice?.finish_reason === "length") return json(null, 502, { code: "OUTPUT_TRUNCATED" });
       return json(null, 200, {
         requestId: `deepseek-cloud-${startedAt}`,
         content,

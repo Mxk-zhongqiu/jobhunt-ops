@@ -120,23 +120,26 @@ function buildProjects(): QuantProject[] {
 
 function buildKnowledge(): KnowledgeTopic[] {
   return [
-    { id: "dk1", category: "数学/统计", name: "概率论：条件概率/期望/随机游走", priority: "高频", status: "学习中" },
-    { id: "dk2", category: "数学/统计", name: "假设检验", priority: "必考", status: "学习中" },
-    { id: "dk3", category: "数学/统计", name: "相关性、回归", priority: "必考", status: "已掌握" },
-    { id: "dk4", category: "数学/统计", name: "过拟合与多重检验（因子回测必考）", priority: "必考", status: "学习中" },
-    { id: "dk5", category: "数学/统计", name: "时间序列：平稳性/ACF/PACF/协整", priority: "高频", status: "未开始" },
-    { id: "dk6", category: "编程", name: "Python：numpy/pandas/matplotlib/sklearn", priority: "必考", status: "学习中" },
-    { id: "dk7", category: "编程", name: "tushare / akshare 取数", priority: "必考", status: "已掌握" },
-    { id: "dk8", category: "编程", name: "SQL", priority: "加分", status: "未开始" },
-    { id: "dk9", category: "金融与量化", name: "因子投资：Fama-French/IC/ICIR/分层回测", priority: "必考", status: "学习中" },
-    { id: "dk10", category: "金融与量化", name: "风险指标：夏普/最大回撤/VaR/换手", priority: "必考", status: "已掌握" },
-    { id: "dk11", category: "金融与量化", name: "经典策略：动量/反转/均值回归/配对交易", priority: "高频", status: "学习中" },
-    { id: "dk12", category: "机器学习", name: "树模型：XGBoost / LightGBM", priority: "加分", status: "未开始" },
-    { id: "dk13", category: "机器学习", name: "防止数据泄漏（量化里最致命的坑）", priority: "必考", status: "学习中" },
-    { id: "dk14", category: "面试准备", name: "概率题 100 题（每天 3–5 题）", priority: "高频", status: "学习中" },
-    { id: "dk15", category: "面试准备", name: "LeetCode 热题 100", priority: "高频", status: "未开始" },
-    { id: "dk16", category: "面试准备", name: "金融概念：CAPM/Alpha/Beta/回撤/夏普", priority: "必考", status: "已掌握" },
-    { id: "dk17", category: "面试准备", name: "行为面：为什么做量化 / 项目讲述框架", priority: "必考", status: "未开始" },
+    { id: "dk1", category: "数学/统计", name: "概率论：条件概率/期望/随机游走", priority: "高频", status: "学习中", points: [
+      { id: "dkp1", title: "条件概率与全概率公式", summary: "P(A|B)=P(AB)/P(B)；全概率：按完备事件组加权求和。", depth: "基础", mastered: true },
+      { id: "dkp2", title: "贝叶斯公式", summary: "P(A|B)=P(B|A)P(A)/P(B)；先验/后验/似然辨析。", depth: "基础", mastered: false },
+    ] },
+    { id: "dk2", category: "数学/统计", name: "假设检验", priority: "必考", status: "学习中", points: [] },
+    { id: "dk3", category: "数学/统计", name: "相关性、回归", priority: "必考", status: "已掌握", points: [] },
+    { id: "dk4", category: "数学/统计", name: "过拟合与多重检验（因子回测必考）", priority: "必考", status: "学习中", points: [] },
+    { id: "dk5", category: "数学/统计", name: "时间序列：平稳性/ACF/PACF/协整", priority: "高频", status: "未开始", points: [] },
+    { id: "dk6", category: "编程", name: "Python：numpy/pandas/matplotlib/sklearn", priority: "必考", status: "学习中", points: [] },
+    { id: "dk7", category: "编程", name: "tushare / akshare 取数", priority: "必考", status: "已掌握", points: [] },
+    { id: "dk8", category: "编程", name: "SQL", priority: "加分", status: "未开始", points: [] },
+    { id: "dk9", category: "金融与量化", name: "因子投资：Fama-French/IC/ICIR/分层回测", priority: "必考", status: "学习中", points: [] },
+    { id: "dk10", category: "金融与量化", name: "风险指标：夏普/最大回撤/VaR/换手", priority: "必考", status: "已掌握", points: [] },
+    { id: "dk11", category: "金融与量化", name: "经典策略：动量/反转/均值回归/配对交易", priority: "高频", status: "学习中", points: [] },
+    { id: "dk12", category: "机器学习", name: "树模型：XGBoost / LightGBM", priority: "加分", status: "未开始", points: [] },
+    { id: "dk13", category: "机器学习", name: "防止数据泄漏（量化里最致命的坑）", priority: "必考", status: "学习中", points: [] },
+    { id: "dk14", category: "面试准备", name: "概率题 100 题（每天 3–5 题）", priority: "高频", status: "学习中", points: [] },
+    { id: "dk15", category: "面试准备", name: "LeetCode 热题 100", priority: "高频", status: "未开始", points: [] },
+    { id: "dk16", category: "面试准备", name: "金融概念：CAPM/Alpha/Beta/回撤/夏普", priority: "必考", status: "已掌握", points: [] },
+    { id: "dk17", category: "面试准备", name: "行为面：为什么做量化 / 项目讲述框架", priority: "必考", status: "未开始", points: [] },
   ];
 }
 

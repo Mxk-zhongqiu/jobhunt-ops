@@ -4,7 +4,8 @@
 export type AICapability =
   | "ask"       // 知识问答：基于授权上下文回答，不写入
   | "review"    // 面试复盘草稿：生成可确认写入面试记录的复盘
-  | "resume";   // 简历要点翻译：把经历翻译成量化岗语言（不写入，可复制）
+  | "resume"    // 简历要点翻译：把经历翻译成量化岗语言（不写入，可复制）
+  | "knowledge"; // 知识点生成：为主题生成知识点草稿，确认后写入知识主题
 
 export interface AIContextSelection {
   interviewIds: string[];
@@ -19,6 +20,12 @@ export interface AIRequest {
   userInstruction: string;
 }
 
+export interface KnowledgeDraftPoint {
+  title: string;
+  summary: string;
+  depth?: "基础" | "进阶";
+}
+
 export type AIProposalPayload =
   | { kind: "answer"; content: string }
   | {
@@ -30,7 +37,8 @@ export type AIProposalPayload =
       weaknesses: string[];
       nextActions: string[];
     }
-  | { kind: "resume"; original: string; translated: string; keywords: string[] };
+  | { kind: "resume"; original: string; translated: string; keywords: string[] }
+  | { kind: "knowledge"; topicName: string; points: KnowledgeDraftPoint[] };
 
 export interface AIProposal {
   id: string;
@@ -54,6 +62,8 @@ export interface AIProviderStatus {
   model: string;
   maxTokens: number;
   timeoutMs: number;
+  /** 实际生效的代理链路：本地代理 / 云端 Worker */
+  source?: "local" | "cloud";
 }
 
 export interface AIService {

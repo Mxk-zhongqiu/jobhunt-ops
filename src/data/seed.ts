@@ -1,18 +1,17 @@
 import type {
   AppState,
   Application,
+  KnowledgePoint,
   KnowledgeTopic,
   QuantProject,
+  TopicPriority,
   WeeklyPlan,
 } from "../types/domain";
-import { createDemoState } from "./demoSeed";
 
 // ─── 种子数据：直接来自《求职规划内部文档》 ───
 // 这是"真实作战数据"的初始清单，不是演示数据。用户可以自由修改、删除、补充。
 //
-// ⚠️ 本模块必须保持"零顶层副作用"（顶层只有函数/纯常量声明，没有函数调用）：
-// 公网展示版（build:demo）时 __DEMO_MODE__=true，Rollup 才能把本模块整体摇掉，
-// 真实数据才不会混进公网产物。新增数据请放进对应构造函数（build*）里。
+// ⚠️ 本模块必须保持"零顶层副作用"（顶层只有函数/纯常量声明，没有函数调用），保持模块纯净。新增数据请放进对应构造函数（build*）里。
 
 function now(): string {
   return new Date().toISOString();
@@ -170,45 +169,62 @@ export const seedProjects: QuantProject[] = [
 ];
 
 // 知识体系：文档 §三（按优先级）
+// ⚠️ 知识点内容默认留空（v0.3 搭框架）：在「知识」页逐条填写，或用 AI 助手生成。
+// 「概率论」主题下保留了 3 条示例知识点，用于演示格式，可修改或删除。
 export const seedKnowledge: KnowledgeTopic[] = [
   // 数学 / 统计
-  { id: "k-prob", category: "数学/统计", name: "概率论：条件概率/期望/随机游走/鞅", priority: "高频", status: "未开始" },
-  { id: "k-test", category: "数学/统计", name: "假设检验", priority: "必考", status: "未开始" },
-  { id: "k-reg", category: "数学/统计", name: "相关性、回归", priority: "必考", status: "未开始" },
-  { id: "k-overfit", category: "数学/统计", name: "过拟合与多重检验（因子回测必考）", priority: "必考", status: "未开始" },
-  { id: "k-stoch", category: "数学/统计", name: "随机过程：布朗运动/伊藤引理/GARCH", priority: "高频", status: "未开始" },
-  { id: "k-ts", category: "数学/统计", name: "时间序列：平稳性/ACF/PACF/ARIMA/协整", priority: "高频", status: "未开始" },
-  { id: "k-kalman", category: "数学/统计", name: "状态空间与卡尔曼滤波（个人强项，重点发挥）", priority: "高频", status: "未开始" },
-  { id: "k-opt", category: "数学/统计", name: "凸优化与组合优化", priority: "加分", status: "未开始" },
+  knowledgeTopic("k-prob", "数学/统计", "概率论：条件概率/期望/随机游走/鞅", "高频", [
+    point("kp-1", "条件概率与全概率公式", "P(A|B)=P(AB)/P(B)；全概率：P(A)=ΣP(A|Bᵢ)P(Bᵢ)，按完备事件组加权求和。面试常配「盒子取球」题。", "基础"),
+    point("kp-2", "贝叶斯公式", "P(A|B)=P(B|A)P(A)/P(B)；辨析先验/后验/似然。必考「疾病检测假阳性」题。", "基础"),
+    point("kp-3", "全期望公式", "E[X]=E[E[X|Y]]；分层求期望的利器，例如「先掷骰子再抛硬币的次数期望」。", "基础"),
+  ]),
+  knowledgeTopic("k-test", "数学/统计", "假设检验", "必考"),
+  knowledgeTopic("k-reg", "数学/统计", "相关性、回归", "必考"),
+  knowledgeTopic("k-overfit", "数学/统计", "过拟合与多重检验（因子回测必考）", "必考"),
+  knowledgeTopic("k-stoch", "数学/统计", "随机过程：布朗运动/伊藤引理/GARCH", "高频"),
+  knowledgeTopic("k-ts", "数学/统计", "时间序列：平稳性/ACF/PACF/ARIMA/协整", "高频"),
+  knowledgeTopic("k-kalman", "数学/统计", "状态空间与卡尔曼滤波（个人强项，重点发挥）", "高频"),
+  knowledgeTopic("k-opt", "数学/统计", "凸优化与组合优化", "加分"),
   // 编程
-  { id: "k-py", category: "编程", name: "Python：numpy/pandas/matplotlib/sklearn", priority: "必考", status: "未开始" },
-  { id: "k-data", category: "编程", name: "tushare / akshare 取数", priority: "必考", status: "未开始" },
-  { id: "k-sql", category: "编程", name: "SQL", priority: "加分", status: "未开始" },
-  { id: "k-cpp", category: "编程", name: "C++（开发岗硬性要求）", priority: "加分", status: "未开始" },
+  knowledgeTopic("k-py", "编程", "Python：numpy/pandas/matplotlib/sklearn", "必考"),
+  knowledgeTopic("k-data", "编程", "tushare / akshare 取数", "必考"),
+  knowledgeTopic("k-sql", "编程", "SQL", "加分"),
+  knowledgeTopic("k-cpp", "编程", "C++（开发岗硬性要求）", "加分"),
   // 金融与量化
-  { id: "k-factor", category: "金融与量化", name: "因子投资：Fama-French/Barra/IC/ICIR/分层回测", priority: "必考", status: "未开始" },
-  { id: "k-risk", category: "金融与量化", name: "风险指标：夏普/最大回撤/VaR/换手", priority: "必考", status: "未开始" },
-  { id: "k-strategy", category: "金融与量化", name: "经典策略：动量/反转/均值回归/配对交易/多因子", priority: "高频", status: "未开始" },
-  { id: "k-micro", category: "金融与量化", name: "市场微观结构（进阶）", priority: "加分", status: "未开始" },
+  knowledgeTopic("k-factor", "金融与量化", "因子投资：Fama-French/Barra/IC/ICIR/分层回测", "必考"),
+  knowledgeTopic("k-risk", "金融与量化", "风险指标：夏普/最大回撤/VaR/换手", "必考"),
+  knowledgeTopic("k-strategy", "金融与量化", "经典策略：动量/反转/均值回归/配对交易/多因子", "高频"),
+  knowledgeTopic("k-micro", "金融与量化", "市场微观结构（进阶）", "加分"),
   // 机器学习
-  { id: "k-tree", category: "机器学习", name: "树模型：XGBoost / LightGBM", priority: "加分", status: "未开始" },
-  { id: "k-feat", category: "机器学习", name: "正则化与特征工程", priority: "加分", status: "未开始" },
-  { id: "k-leak", category: "机器学习", name: "防止数据泄漏（量化里最致命的坑，答好极加分）", priority: "必考", status: "未开始" },
+  knowledgeTopic("k-tree", "机器学习", "树模型：XGBoost / LightGBM", "加分"),
+  knowledgeTopic("k-feat", "机器学习", "正则化与特征工程", "加分"),
+  knowledgeTopic("k-leak", "机器学习", "防止数据泄漏（量化里最致命的坑，答好极加分）", "必考"),
   // 面试准备
-  { id: "k-prob100", category: "面试准备", name: "概率题 100 题（每天 3–5 题）", priority: "高频", status: "未开始" },
-  { id: "k-lc", category: "面试准备", name: "LeetCode 热题 100", priority: "高频", status: "未开始" },
-  { id: "k-finance", category: "面试准备", name: "金融概念：CAPM/Alpha/Beta/回撤/夏普", priority: "必考", status: "未开始" },
-  { id: "k-behavior", category: "面试准备", name: "行为面：为什么做量化 / 项目讲述（问题→方案→结果→重来）", priority: "必考", status: "未开始" },
-  { id: "k-qa-doc", category: "面试准备", name: "高频面试题文档（W8 整理）", priority: "必考", status: "未开始" },
+  knowledgeTopic("k-prob100", "面试准备", "概率题 100 题（每天 3–5 题）", "高频"),
+  knowledgeTopic("k-lc", "面试准备", "LeetCode 热题 100", "高频"),
+  knowledgeTopic("k-finance", "面试准备", "金融概念：CAPM/Alpha/Beta/回撤/夏普", "必考"),
+  knowledgeTopic("k-behavior", "面试准备", "行为面：为什么做量化 / 项目讲述（问题→方案→结果→重来）", "必考"),
+  knowledgeTopic("k-qa-doc", "面试准备", "高频面试题文档（W8 整理）", "必考"),
 ];
 
+/** 知识点构造（内容留空时只传标题与要点） */
+function point(id: string, title: string, summary: string, depth?: KnowledgePoint["depth"]): KnowledgePoint {
+  return { id, title, summary, depth, mastered: false };
+}
+
+/** 知识主题构造：默认未开始、无知识点 */
+function knowledgeTopic(
+  id: string,
+  category: string,
+  name: string,
+  priority: TopicPriority,
+  points: KnowledgePoint[] = [],
+): KnowledgeTopic {
+  return { id, category, name, priority, status: "未开始", points };
+}
+
 export function createSeedState(): AppState {
-  // 公网展示版（npm run build:demo）使用虚构演示数据，避免真实求职策略外泄；
-  // 本地开发与正式构建保持真实种子数据不变。__DEMO_MODE__ 由构建期 define 注入，
-  // 未使用的分支会被 Rollup 整体摇掉（真实数据不进公网包，反之亦然）。
-  if (__DEMO_MODE__) {
-    return createDemoState();
-  }
+  // 真实数据即全部构建（本地与公网）的默认状态；「游客预览」虚构演示数据由 appStore 独立切换。
   return createRealSeedState();
 }
 

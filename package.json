@@ -8,13 +8,15 @@
     "dev:full": "node scripts/dev-full.mjs",
     "ai:proxy": "node server/deepseek-proxy.mjs",
     "build": "tsc -b && vite build",
-    "build:demo": "tsc -b && vite build --mode demo && node scripts/verify-seed.mjs --expect-demo",
+    "build:demo": "tsc -b && vite build --mode demo",
     "deploy": "npm run build && firebase deploy --only hosting,firestore:rules",
     "preview": "vite preview",
     "browser:smoke": "node scripts/browser/smoke-test.mjs",
-    "verify": "node scripts/verify-ai.mjs",
-    "verify:seed:real": "node scripts/verify-seed.mjs --expect-real",
-    "verify:seed:demo": "node scripts/verify-seed.mjs --expect-demo"
+    "state:export": "node scripts/data/state-tools.mjs export",
+    "state:backup": "node scripts/data/state-tools.mjs backup",
+    "state:validate": "node scripts/data/state-tools.mjs validate",
+    "state:apply": "node scripts/data/state-tools.mjs apply",
+    "verify": "node scripts/verify-ai.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",

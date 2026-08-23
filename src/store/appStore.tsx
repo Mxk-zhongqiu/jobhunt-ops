@@ -9,6 +9,8 @@ import type {
   AppState,
   Application,
   InterviewLog,
+  KnowledgePoint,
+  KnowledgeTopic,
   PlanTask,
   ProjectMilestone,
   QuantProject,
@@ -34,9 +36,38 @@ type AppAction =
   | { type: "set-project-status"; id: string; status: QuantProject["status"] }
   | { type: "toggle-milestone"; projectId: string; milestoneId: string }
   | { type: "set-topic-status"; id: string; status: TopicStatus }
+  | { type: "add-topic"; topic: KnowledgeTopic }
+  | { type: "update-topic"; id: string; patch: Partial<KnowledgeTopic> }
+  | { type: "remove-topic"; id: string }
+  | { type: "set-point-mastered"; topicId: string; pointId: string; mastered: boolean }
+  | { type: "add-point"; topicId: string; point: KnowledgePoint }
+  | { type: "update-point"; topicId: string; pointId: string; patch: Partial<KnowledgePoint> }
+  | { type: "remove-point"; topicId: string; pointId: string }
+  | { type: "add-points"; topicId: string; points: KnowledgePoint[] }
+  | { type: "replace-points"; topicId: string; points: KnowledgePoint[] }
   | { type: "set-settings"; patch: Partial<AppSettings> }
   | { type: "toggle-question-mastered"; key: string }
   | { type: "replace-state"; state: AppState };
+
+// 模块级种子：知识模块迁移回填用（旧数据缺 points 时按 id 从种子复制知识点）
+const seedState = createSeedState();
+
+/**
+ * 知识主题兼容迁移：
+ * - 旧主题没有 points 字段 → 按 id 从种子主题回填知识点（老用户升级自动获得内容）；
+ * - 已有 points 则保留（含用户清空后的空数组，不回填）；
+ * - 点级字段补齐默认值（mastered 缺省 false）。
+ */
+function normalizeKnowledge(knowledge: KnowledgeTopic[]): KnowledgeTopic[] {
+  const seedById = new Map(seedState.knowledge.map((topic) => [topic.id, topic]));
+  return knowledge.map((topic) => {
+    const hasPoints = Array.isArray(topic.points);
+    const points = hasPoints
+      ? topic.points.map((point) => ({ ...point, mastered: point.mastered === true }))
+      : (seedById.get(topic.id)?.points ?? []).map((point) => ({ ...point }));
+    return { ...topic, points };
+  });
+}
 
 function mergeState(seed: AppState, stored: Partial<AppState> | null): AppState {
   if (!stored) return seed;
@@ -45,7 +76,7 @@ function mergeState(seed: AppState, stored: Partial<AppState> | null): AppState 
     interviews: stored.interviews ?? seed.interviews,
     weeklyPlans: stored.weeklyPlans ?? seed.weeklyPlans,
     projects: stored.projects ?? seed.projects,
-    knowledge: stored.knowledge ?? seed.knowledge,
+    knowledge: normalizeKnowledge(stored.knowledge ?? seed.knowledge),
     settings: { ...seed.settings, ...stored.settings },
     questionBankMastered: stored.questionBankMastered ?? seed.questionBankMastered,
   };
@@ -129,6 +160,56 @@ function reducer(state: AppState, action: AppAction): AppState {
       };
     case "set-topic-status":
       return { ...state, knowledge: state.knowledge.map((item) => (item.id === action.id ? { ...item, status: action.status } : item)) };
+    case "add-topic":
+      return { ...state, knowledge: [...state.knowledge, action.topic] };
+    case "update-topic":
+      return { ...state, knowledge: state.knowledge.map((item) => (item.id === action.id ? { ...item, ...action.patch } : item)) };
+    case "remove-topic":
+      return { ...state, knowledge: state.knowledge.filter((item) => item.id !== action.id) };
+    case "set-point-mastered":
+      return {
+        ...state,
+        knowledge: state.knowledge.map((topic) =>
+          topic.id === action.topicId
+            ? { ...topic, points: topic.points.map((point) => (point.id === action.pointId ? { ...point, mastered: action.mastered } : point)) }
+            : topic,
+        ),
+      };
+    case "add-point":
+      return {
+        ...state,
+        knowledge: state.knowledge.map((topic) =>
+          topic.id === action.topicId ? { ...topic, points: [...(topic.points ?? []), action.point] } : topic,
+        ),
+      };
+    case "update-point":
+      return {
+        ...state,
+        knowledge: state.knowledge.map((topic) =>
+          topic.id === action.topicId
+            ? { ...topic, points: topic.points.map((point) => (point.id === action.pointId ? { ...point, ...action.patch } : point)) }
+            : topic,
+        ),
+      };
+    case "remove-point":
+      return {
+        ...state,
+        knowledge: state.knowledge.map((topic) =>
+          topic.id === action.topicId ? { ...topic, points: topic.points.filter((point) => point.id !== action.pointId) } : topic,
+        ),
+      };
+    case "add-points":
+      return {
+        ...state,
+        knowledge: state.knowledge.map((topic) =>
+          topic.id === action.topicId ? { ...topic, points: [...(topic.points ?? []), ...action.points] } : topic,
+        ),
+      };
+    case "replace-points":
+      return {
+        ...state,
+        knowledge: state.knowledge.map((topic) => (topic.id === action.topicId ? { ...topic, points: action.points } : topic)),
+      };
     case "set-settings":
       return { ...state, settings: { ...state.settings, ...action.patch } };
     case "toggle-question-mastered":
@@ -139,8 +220,12 @@ function reducer(state: AppState, action: AppAction): AppState {
           : [...state.questionBankMastered, action.key],
       };
     case "replace-state":
-      // 兼容旧备份：导入/重置的数据若缺新字段则兜底为空数组
-      return { ...action.state, questionBankMastered: action.state.questionBankMastered ?? [] };
+      // 兼容旧备份：导入/重置的数据若缺新字段则兜底为空数组；知识主题统一走迁移回填
+      return {
+        ...action.state,
+        knowledge: normalizeKnowledge(action.state.knowledge ?? []),
+        questionBankMastered: action.state.questionBankMastered ?? [],
+      };
     default:
       return state;
   }
@@ -159,6 +244,17 @@ export interface AppStoreValue extends AppState {
   setProjectStatus: (id: string, status: QuantProject["status"]) => void;
   toggleMilestone: (projectId: string, milestoneId: string) => void;
   setTopicStatus: (id: string, status: TopicStatus) => void;
+  addTopic: (topic: Omit<KnowledgeTopic, "id" | "points">) => void;
+  updateTopic: (id: string, patch: Partial<Omit<KnowledgeTopic, "id">>) => void;
+  removeTopic: (id: string) => void;
+  setPointMastered: (topicId: string, pointId: string, mastered: boolean) => void;
+  addPoint: (topicId: string, point: Omit<KnowledgePoint, "id">) => void;
+  updatePoint: (topicId: string, pointId: string, patch: Partial<KnowledgePoint>) => void;
+  removePoint: (topicId: string, pointId: string) => void;
+  /** 批量追加知识点（AI 生成确认后写入） */
+  addPoints: (topicId: string, points: Array<Omit<KnowledgePoint, "id">>) => void;
+  /** 替换该主题全部知识点（AI 生成确认后写入） */
+  replacePoints: (topicId: string, points: Array<Omit<KnowledgePoint, "id">>) => void;
   setSettings: (patch: Partial<AppSettings>) => void;
   toggleQuestionMastered: (key: string) => void;
   restoreState: (state: AppState) => void;
@@ -297,6 +393,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setProjectStatus: (id, status) => dispatch({ type: "set-project-status", id, status }),
     toggleMilestone: (projectId, milestoneId) => dispatch({ type: "toggle-milestone", projectId, milestoneId }),
     setTopicStatus: (id, status) => dispatch({ type: "set-topic-status", id, status }),
+    addTopic: (topic) => dispatch({ type: "add-topic", topic: { ...topic, id: `topic-${Date.now()}`, points: [] } }),
+    updateTopic: (id, patch) => dispatch({ type: "update-topic", id, patch }),
+    removeTopic: (id) => dispatch({ type: "remove-topic", id }),
+    setPointMastered: (topicId, pointId, mastered) => dispatch({ type: "set-point-mastered", topicId, pointId, mastered }),
+    addPoint: (topicId, point) => dispatch({ type: "add-point", topicId, point: { ...point, id: `point-${Date.now()}` } }),
+    updatePoint: (topicId, pointId, patch) => dispatch({ type: "update-point", topicId, pointId, patch }),
+    removePoint: (topicId, pointId) => dispatch({ type: "remove-point", topicId, pointId }),
+    addPoints: (topicId, points) =>
+      dispatch({ type: "add-points", topicId, points: points.map((point, index) => ({ ...point, id: `point-${Date.now()}-${index}` })) }),
+    replacePoints: (topicId, points) =>
+      dispatch({ type: "replace-points", topicId, points: points.map((point, index) => ({ ...point, id: `point-${Date.now()}-${index}` })) }),
     setSettings: (patch) => dispatch({ type: "set-settings", patch }),
     toggleQuestionMastered: (key) => dispatch({ type: "toggle-question-mastered", key }),
     restoreState: (nextState) => dispatch({ type: "replace-state", state: nextState }),

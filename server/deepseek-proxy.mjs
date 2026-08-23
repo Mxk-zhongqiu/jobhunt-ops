@@ -61,6 +61,9 @@ function schemaInstruction(capability) {
   if (capability === "resume") {
     return `${shared} 格式：{"kind":"resume","original":"原文","translated":"量化岗语言改写","keywords":["时序建模","状态估计","组合优化"...]}`;
   }
+  if (capability === "knowledge") {
+    return `${shared} 格式：{"kind":"knowledge","topicName":"目标主题名","points":[{"title":"知识点名","summary":"核心要点，≤2 句（含公式/结论/面试答法）","depth":"基础或进阶，可不填"}]}；生成 6–12 个知识点，覆盖该主题核心考点，结合授权上下文中的已有知识点避免重复；summary 务必精简，控制总输出长度。`;
+  }
   return `${shared} 格式：{"kind":"answer","content":"..."}`;
 }
 
@@ -155,8 +158,11 @@ const server = createServer(async (request, response) => {
     capability = payload.request?.capability ?? "unknown";
     if (!payload.request || !payload.authorizedContext) return sendJson(response, 400, { code: "INVALID_REQUEST" });
     const result = await callDeepSeek(payload);
-    const content = result.choices?.[0]?.message?.content;
+    const choice = result.choices?.[0];
+    const content = choice?.message?.content;
     if (!content) throw new Error("EMPTY_RESPONSE");
+    // 输出达到 max_tokens 上限被截断：JSON 必然不完整，直接报明确错误
+    if (choice?.finish_reason === "length") throw new Error("OUTPUT_TRUNCATED");
     const log = {
       requestId, createdAt: new Date().toISOString(), providerId: "deepseek", model: result.model || model,
       capability, status: "success", durationMs: Date.now() - startedAt,
