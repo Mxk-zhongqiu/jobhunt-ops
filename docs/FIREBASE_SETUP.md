@@ -82,7 +82,7 @@ npm run deploy        # = npm run build（真实种子 + Firebase 配置）+ fir
 ```bash
 npm run dev           # 本地模式：不登录 = 纯本地（无需 Firebase 配置也能跑）
 npm run dev:full      # 本地 + DeepSeek 本地代理（8787），AI 走本地路径
-npm run build:demo    # 公网展示版（虚构数据 + 无云同步 + 仅 Mock AI）——依然可用
+npm run build         # 生产构建（真实数据 + 云同步 + 云端 AI，公网即真实工具）
 ```
 
 - 开发环境 AI 走本地代理（`fetch /api/ai/deepseek`），生产环境走 Cloudflare Worker（`VITE_AI_PROXY_URL`），代码自动区分；
@@ -101,7 +101,7 @@ npm run build:demo    # 公网展示版（虚构数据 + 无云同步 + 仅 Mock
 
 ## 故障排查
 
-- **登录报"云端未配置"**：`.env` 没填 `VITE_FIREBASE_*`，或用了 `npm run build:demo` 产物（展示版禁云）；
+- **登录报"云端未配置"**：`.env` 没填 `VITE_FIREBASE_*`（所有构建均启用云端，填好配置后重新构建部署即可）；
 - **AI 报"云端 AI 未配置"**：Worker 没部署，或 `.env` 的 `VITE_AI_PROXY_URL` 没填/填错（填完需重新 `npm run deploy`）；
 - **AI 报"需要先登录"**：真实 DeepSeek 仅登录用户可用，右上角登录后再试；
 - **AI 报"密钥无效"（AUTHENTICATION_FAILED）**：Worker 里 `DEEPSEEK_API_KEY` 填错 → Worker → 设置 → 变量和机密 → 覆盖该机密 → 重新部署；

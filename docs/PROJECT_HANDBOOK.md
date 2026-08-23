@@ -42,8 +42,8 @@
 ```text
 F:\jobhunt-ops\
 ├── index.html                  # 入口 HTML（zh-CN，标题"求职作战台 · 2026 秋招"）
-├── package.json                # 脚本：dev / dev:full / ai:proxy / build / build:demo / deploy / preview / verify*
-├── vite.config.ts              # host=127.0.0.1, port=8788, proxy /api/ai → 127.0.0.1:8787, base="./", __DEMO_MODE__ define, firebase manualChunks
+├── package.json                # 脚本：dev / dev:full / ai:proxy / build / build:demo / deploy / preview / verify / state:*
+├── vite.config.ts              # host=127.0.0.1, port=8788, proxy /api/ai → 127.0.0.1:8787, base="./", firebase manualChunks
 ├── tsconfig.json / app / node  # TS 严格模式工程引用
 ├── .env.example                # DEEPSEEK_* 本地密钥模板 + VITE_FIREBASE_* 公网配置模板
 ├── .gitignore                  # 含 .env / .env.*.local / functions/node_modules / .firebase（密钥绝不入库）
@@ -64,8 +64,7 @@ F:\jobhunt-ops\
 │   └── ai-proxy.js             # ★ Cloudflare Worker AI 代理（默认方案，免费；密钥=Worker 环境变量 + 登录令牌校验，见 §14）
 ├── scripts/
 │   ├── dev-full.mjs            # 一条命令：AI 代理 + Vite（透传 vite 参数）
-│   ├── verify-ai.mjs           # ★ AI 安全门禁（26 项字符串检查，见 §7.5 / §14.4）
-│   └── verify-seed.mjs         # ★ 种子数据隔离门禁（真实/演示包互不含对方数据，见 §13.2）
+│   ├── verify-ai.mjs           # ★ AI 安全门禁（36 项字符串检查，见 §7.5 / §14.4）
 ├── public/
 │   └── _redirects              # SPA 路由回退（Netlify / Cloudflare Pages）
 └── src/
@@ -87,11 +86,11 @@ F:\jobhunt-ops\
     │   ├── QuestionBankPage.tsx
     │   ├── AIPage.tsx
     │   └── DataPage.tsx
-    ├── data/seed.ts            # ★ 种子数据（真实初始清单；零顶层副作用，见 §13.2）
-    ├── data/demoSeed.ts        # ★ 公网展示版演示数据（虚构，零顶层副作用）
+    ├── data/seed.ts            # ★ 种子数据（真实初始清单；零顶层副作用，所有构建均使用）
+    ├── data/demoSeed.ts        # ★ 「游客预览」演示数据（虚构，仅 appStore.previewDemo 使用）
     ├── store/appStore.tsx      # ★ 状态 + localStorage 持久化 + 云同步（Firestore）+ 派生工具（见 §14）
     ├── services/
-    │   ├── firebase.ts         # ★ Firebase 初始化/认证/错误映射（__DEMO_MODE__ 时整模块禁用）
+    │   ├── firebase.ts         # ★ Firebase 初始化/认证/错误映射（未配置 .env 时整模块禁用）
     │   └── ai/                 # ★ AI 服务层（见 §7）
     │       ├── index.ts        # createAIService 工厂
     │       ├── context.ts      # buildAIContextSummary
@@ -256,13 +255,11 @@ npm run dev          # 仅前端 → http://127.0.0.1:8788（未配置 Firebase 
 npm run dev:full     # ★ 本地推荐：AI 代理(8787) + 前端(8788) 一条命令
 npm run dev:full -- --port 8789   # 换端口（dev-full 透传 vite 参数）
 npm run ai:proxy     # 只起代理
-npm run build        # 真实版：tsc -b（严格检查） + vite build → dist/（真实种子数据 + Firebase 云同步）
-npm run build:demo   # ★ 公网展示版：虚构演示数据 + 无云同步 + 仅 Mock AI；末尾自动跑种子隔离门禁
+npm run build        # 生产构建：tsc -b（严格检查） + vite build → dist/（真实种子数据 + Firebase 云同步）
+npm run build:demo   # 与 build 相同（兼容别名）
 npm run deploy       # ★ 正式发布：build + firebase deploy --only hosting,firestore:rules（免费计划不含 functions）
 npm run preview      # 预览构建产物
-npm run verify       # ★ AI 安全门禁 26 项（改动 AI/云函数后必跑）
-npm run verify:seed:real   # 检查 dist 为真实包且不含演示数据
-npm run verify:seed:demo   # 检查 dist 为演示包且不含真实数据
+npm run verify       # ★ AI 安全门禁 36 项（改动 AI/云函数后必跑）
 cd functions && npm install && cd ..   # 云函数依赖（仅 Blaze 备选方案需要）
 # 云端密钥（默认方案 Cloudflare Worker）：控制台 → Worker → 设置 → 变量和机密 → 机密 DEEPSEEK_API_KEY
 ```
@@ -275,7 +272,7 @@ cd functions && npm install && cd ..   # 云函数依赖（仅 Blaze 备选方�
 2. **年份差异**：秋招文档快照写 "2025-08-18"，而本机系统时钟为 2026-08-18。种子 `settings.startDate="2026-08-18"` 使"今天=第 1 周"成立。若实际日期不同，改 startDate 即自动校准周次。
 3. **持久化语义**：未登录时 localStorage 是唯一存储（清浏览器数据即丢数据，`/data` 导出备份是刚需）；登录后本地 + 云端 Firestore 双写（云端为真、本地为备份，见 §14）。新增字段走 `mergeState`（settings 浅合并，数组以存储为准）；云端文档整份覆盖（`replace-state`），字段缺失有兜底。
 4. **seed 是真实数据**：12 家冲刺层公司、W1–W10、两个项目、24 个知识主题均来自策略文档，可自由增删改，但**已初始化过 localStorage 的用户不会自动拿到 seed 改动**（数组以存储为准）；如需推送新种子，需在 merge 逻辑或版本迁移上处理。
-5. **验证脚本是字符串检查**：`verify-ai.mjs` 依赖特定字符串（如 `attempt < 2`、`updateInterview(` 等），重构成其他写法会误报/漏报，改动后跑 `npm run verify` 确认（当前 26 项，含云函数 9 项）。
+5. **验证脚本是字符串检查**：`verify-ai.mjs` 依赖特定字符串（如 `attempt < 2`、`updateInterview(` 等），重构成其他写法会误报/漏报，改动后跑 `npm run verify` 确认（当前 36 项）。
 6. **dev 服务器在本沙箱内无法监听端口**（EACCES），冒烟测试只能在用户本机做；构建（tsc+vite）可在任意环境验证。
 7. **旧项目归档**：`F:\MyWorld` 保持不动，仅作架构参考（repository/selector、AI 代理、验证门禁三样可借鉴）。
 
@@ -283,7 +280,7 @@ cd functions && npm install && cd ..   # 云函数依赖（仅 Blaze 备选方�
 
 ## 11. 路线图与下一步
 
-已交付：MVP 底座（8 页面+持久化）→ 数据导入导出 → AI 助手（问答/复盘/简历翻译）→ 高频面试题库自动汇总（`/question-bank`，从 `InterviewLog.questions` 每题一行汇总去重、按频率排序、标记已掌握、导出 Markdown；复盘正文为自由文本不参与解析）→ 公网展示版（`build:demo` 演示数据 + 种子隔离门禁，见 §13 / `docs/DEPLOY.md`）→ Firebase 云端化（认证 + Firestore 跨设备同步 + AI 云函数，见 §14 / `docs/FIREBASE_SETUP.md`）。
+已交付：MVP 底座（8 页面+持久化）→ 数据导入导出 → AI 助手（问答/复盘/简历翻译/知识点生成）→ 高频面试题库自动汇总（`/question-bank`）→ 知识模块细化（主题下知识点项 + 展开学习 + 导出）→ Firebase 云端化（认证 + Firestore 跨设备同步 + AI Worker）→ **公网真实版**（2026 决策：公网 = 真实工具测评，真实数据 + 云同步 + 云端 AI，见 §13 / `docs/DEPLOY.md`）。
 
 待办（按价值排序）：
 
@@ -301,34 +298,32 @@ cd functions && npm install && cd ..   # 云函数依赖（仅 Blaze 备选方�
 1. **先读**：`README.md` → 本文档 §4/§5/§7（模型/数据流/AI）→ 再看要改的页面文件；
 2. **环境**：代码在 `F:\jobhunt-ops`（npm 项目）；本机 Node v22；端口 8788/8787；
 3. **改前验证**：`npm run build` 必须通过（strict TS）；涉及 AI 的文件改动后 `npm run verify`；
-4. **改动套路**：见 §5"新增能力套路"；保持三条红线（真实数据/本地持久化/确认后写入）；
+4. **改动套路**：见 §5"新增能力套路"；保持红线（本地持久化 / 确认后写入 / 账号数据隔离 + AI 白名单）；
 5. **提交规范**：`git add -A && git commit`（local 签名，仓库已初始化 main 分支，4 个历史提交可参考）；
 6. **协作入口**：GUI 侧边栏工作区浏览器中 jobhunt-ops 是独立工作区（`F:\jobhunt-ops`），本会话文件操作可用绝对路径直达。
 
 ---
 
-## 13. 公网展示版（第一阶段发布，见 `docs/DEPLOY.md` 操作指南）
+## 13. 公网部署（真实工具测评版，见 `docs/DEPLOY.md` 操作指南）
 
-### 13.1 三个层次
+### 13.1 公网 = 真实工具（2026 决策）
 
-| 层次 | 展示版处理 |
+| 层次 | 公网版处理 |
 |---|---|
-| 界面 | `npm run build:demo` 构建静态站点（`dist/`），拖到 Netlify Drop / Cloudflare Pages 即得公网网址 |
-| AI 服务 | **仅本地 Mock**：静态托管无服务端，DeepSeek 密钥绝不能进网页；`AIWorkspace` 在 demo 模式隐藏真实 API 入口，显示"公网展示版 · 仅本地 Mock" |
-| 数据同步 | 每个访客浏览器独立的 localStorage 演示数据；跨设备同步属第二阶段（云端数据库+账户） |
+| 界面 | `npm run build` 构建（`dist/`），`firebase deploy --only hosting` 发布到 `https://jobhunt-ops.web.app`（或 Netlify / Cloudflare Pages） |
+| 数据 | **真实种子数据**进入所有构建；虚构演示数据仅保留为应用内「游客预览」开关（`appStore.previewDemo`，截图/内容展示用，不写本地与云端） |
+| AI 服务 | Cloudflare Worker 代理（`worker/ai-proxy.js`），密钥存 Worker 环境变量、校验登录令牌；**建议配置 `AI_ALLOWED_EMAILS` 邮箱白名单**防止公网账号刷 DeepSeek 额度 |
+| 数据同步 | Firebase Auth 登录 → Firestore `states/{uid}` 跨设备同步（规则仅本人可读写）；未登录 = 本地模式 |
 
-### 13.2 数据隔离机制（勿破坏）
+### 13.2 历史数据隔离机制（已移除）
 
-- **开关**：`vite.config.ts` 的 `define: { __DEMO_MODE__: JSON.stringify(mode === "demo") }`；`npm run build:demo` = `vite build --mode demo`；
-- **零顶层副作用**：`seed.ts`（真实）与 `demoSeed.ts`（演示）**顶层只允许函数/纯常量声明，不允许任何函数调用**（如 `new Date()`、`.map()`、`task()`）。否则 Rollup 无法判定模块纯净、会把未使用的种子模块也打进产物——**真实数据混进公网包**。新增种子数据必须放进 `build*` 构造函数里；
-- **门禁**：`scripts/verify-seed.mjs` 检查 dist 中真实/演示标记互斥；`build:demo` 末尾自动跑 `--expect-demo`，`npm run verify:seed:real|demo` 手动跑；
-- **标记维护**：`verify-seed.mjs` 顶部的 `realMarkers`/`demoMarkers` 必须"只出现在对应种子数据里"——"启林"出现在表单占位符（例如：启林投资）曾造成误报，已被移除；"DTL" 等过短串同理。新增种子公司名时同步维护；
-- **演示数据原则**（`demoSeed.ts`）：公司/项目/记录全部虚构或通用化；日期相对"今天"动态生成（`daysFromNow`），任何时候打开都像在正常使用；覆盖全状态漏斗 + 面试记录（让面试题库页也有演示内容）；`aiProvider:"mock"`、`startDate = 今天-21 天`（当前周=第 4 周）。
+- 曾经的 `__DEMO_MODE__` define 与 `scripts/verify-seed.mjs` 种子隔离门禁已随"公网=真实版"决策**删除**（vite.config.ts / package.json / vite-env.d.ts / verify-seed.mjs 均已清理）；`build:demo` 保留为兼容别名；
+- 仍保留的工程约束：`seed.ts` 与 `demoSeed.ts` 保持"零顶层副作用"（顶层只有函数/纯常量声明），模块纯净便于 Rollup 摇树与测试。
 
-### 13.3 边界与第二阶段
+### 13.3 数据安全边界
 
-- 公网包**不含**真实数据与密钥；`dist/_redirects` 提供 SPA 深链接回退；
-- 第二阶段（正式在线产品）：云端数据库 + 账户认证 + AI serverless 代理（密钥存云端环境变量），并把 `appStore` 持久化层从 localStorage 换成云同步——**已完成，见 §14 / `docs/FIREBASE_SETUP.md`**。
+- Firestore `states/{uid}` 规则只允许本人读写；DeepSeek 密钥只在服务端（Worker 环境变量 / 本地代理进程），浏览器接触不到（`npm run verify` 36 项门禁）；
+- 公网测评期注意：任何注册用户都能看到**自己的**数据（互不可见）；AI 额度消耗需用 `AI_ALLOWED_EMAILS` 白名单收口。
 
 ---
 
