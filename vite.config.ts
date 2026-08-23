@@ -9,11 +9,14 @@ export default defineConfig({
   server: {
     // 显式绑定 IPv4 回环：避免 Windows 下 localhost 解析到 ::1 导致 listen EACCES
     host: "127.0.0.1",
-    // 8788：避开 Windows 保留端口段（5173 落在 Hyper-V 保留段 5141–5240 内，绑定即 EACCES）
-    port: 8788,
+    // ⚠️ Windows 的 Hyper-V/WinNAT 会动态保留 TCP 端口段（netsh interface ipv4 show
+    // excludedportrange protocol=tcp 可查），保留段内绑定即 EACCES，且范围会漂移。
+    // 2026-08：原 8788/8787 落入新保留段 8691–8790，已迁移到 8801/8802；再被占时
+    // 先用 netsh 查保留段，选段外端口并同步修改 .env 的 AI_PROXY_PORT 与本 proxy 地址。
+    port: 8801,
     proxy: {
       // 本地 DeepSeek 安全代理（server/deepseek-proxy.mjs）
-      "/api/ai": "http://127.0.0.1:8787",
+      "/api/ai": "http://127.0.0.1:8802",
     },
   },
   build: {

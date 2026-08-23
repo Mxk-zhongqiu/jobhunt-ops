@@ -18,7 +18,7 @@ npm run build
 ```
 
 - 产物在 `dist/`；`dist/_redirects` 已内置 SPA 路由回退（深链接如 `/question-bank` 直接访问也能打开）。
-- 本地预览：`npm run preview`（默认 http://127.0.0.1:8788）。
+- 本地预览：`npm run preview`（默认 http://127.0.0.1:8801）。
 
 ## 部署（Firebase Hosting，当前线上）
 

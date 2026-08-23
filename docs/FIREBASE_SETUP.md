@@ -81,7 +81,7 @@ npm run deploy        # = npm run build（真实种子 + Firebase 配置）+ fir
 
 ```bash
 npm run dev           # 本地模式：不登录 = 纯本地（无需 Firebase 配置也能跑）
-npm run dev:full      # 本地 + DeepSeek 本地代理（8787），AI 走本地路径
+npm run dev:full      # 本地 + DeepSeek 本地代理（8802），AI 走本地路径
 npm run build         # 生产构建（真实数据 + 云同步 + 云端 AI，公网即真实工具）
 ```
 

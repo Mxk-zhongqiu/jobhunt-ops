@@ -1,13 +1,13 @@
 /* global console, process */
 // 截图素材库：用浏览器自动化给 demo 版各页面截图（3:4 竖图，适配小红书）
-// 前置：已运行 npm run build:demo 且本地预览服务已启动（npm run preview，默认 8788）
+// 前置：已运行 npm run build:demo 且本地预览服务已启动（npm run preview，默认 8801）
 // 用法：node scripts/browser/capture-demo.mjs [baseUrl]
 // 输出：.edge-profile/demo-screens/<路由名>.png
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { launchEdge } from "./edge-launcher.mjs";
 
-const BASE = process.argv[2] ?? "http://127.0.0.1:8788";
+const BASE = process.argv[2] ?? "http://127.0.0.1:8801";
 
 const PAGES = [
   { key: "overview",       name: "作战总览",     path: "/" },

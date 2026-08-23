@@ -23,7 +23,7 @@ function loadLocalEnv() {
 
 loadLocalEnv();
 
-const port = Number(process.env.AI_PROXY_PORT || 8787);
+const port = Number(process.env.AI_PROXY_PORT || 8802);
 const apiKey = process.env.DEEPSEEK_API_KEY || "";
 const apiBase = process.env.DEEPSEEK_API_BASE || "https://api.deepseek.com";
 const model = process.env.DEEPSEEK_MODEL || "deepseek-v4-flash";

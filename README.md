@@ -40,6 +40,7 @@
 **所有个人数据的增删改统一走标准化入口**：见 [`docs/DATA_UPDATE_SOP.md`](docs/DATA_UPDATE_SOP.md)（标准作业文件）。
 
 - 一条命令流程：`npm run state:export` → `state:backup` → 编辑 `.edge-profile/state.json` → `state:validate` → `state:apply`（自动备份 + 导入 + 验证）；
+- **周计划高频操作有专用快捷入口**：`npm run state:plan`（勾选/新增/删除/改文本/改标签，自动备份+校验），详见 [`docs/WEEKLY_PLAN_SOP.md`](docs/WEEKLY_PLAN_SOP.md)；
 - 规范状态文件 `.edge-profile/state.json`（真实数据，gitignored，不入库）；备份在 `.edge-profile/backups/`；
 - 你只需一句话描述需求（"新增 XX 公司投递 / 幻方状态改笔试 / 录入面经…"），执行者按 SOP 完成，详见文档 §6 速查表。
 
@@ -47,12 +48,12 @@
 
 ```bash
 npm install
-npm run dev        # 仅前端：http://127.0.0.1:8788
+npm run dev        # 仅前端：http://127.0.0.1:8801
 npm run dev:full   # 前端 + DeepSeek 本地代理（一条命令，推荐）
-npm run ai:proxy   # 只启动代理（127.0.0.1:8787）
+npm run ai:proxy   # 只启动代理（127.0.0.1:8802）
 ```
 
-> 端口说明：开发服务器使用 **8788**（AI 代理 8787 的相邻端口）。默认的 5173 在本机落在 Windows 保留端口段（Hyper-V 保留 5141–5240）内，绑定会报 `EACCES`。若 8788 也被占用，可换端口：`npm run dev:full -- --port 8789`。
+> 端口说明：开发服务器使用 **8801**（AI 代理 8802 的相邻端口）。默认的 5173 在本机落在 Windows 保留端口段（Hyper-V 保留 5141–5240）内，绑定会报 `EACCES`。若 8801 也被占用，可换端口：`npm run dev:full -- --port 8789`。
 
 ## 构建与验证
 

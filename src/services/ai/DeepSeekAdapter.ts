@@ -1,4 +1,4 @@
-// DeepSeekAdapter：开发环境优先调用本机安全代理（127.0.0.1:8787），
+// DeepSeekAdapter：开发环境优先调用本机安全代理（127.0.0.1:8802），
 // 本地代理未配置密钥或未启动时自动回退 Cloudflare Worker 代理（生产环境始终走 Worker）。
 // 两种路径下浏览器都不接触 API 密钥（本地密钥在服务端进程，云端密钥在 Worker 环境变量）。
 // 只把用户显式勾选的最小上下文发送出去；响应经过本地类型校验后才成为草稿。
@@ -122,7 +122,7 @@ async function isLocalProxyUsable(): Promise<boolean> {
   }
 }
 
-/** 调用本地安全代理（127.0.0.1:8787，经 vite /api 转发） */
+/** 调用本地安全代理（127.0.0.1:8802，经 vite /api 转发） */
 async function callLocalProxy(body: unknown): Promise<ProxyResult> {
   const response = await fetch("/api/ai/deepseek", {
     method: "POST",

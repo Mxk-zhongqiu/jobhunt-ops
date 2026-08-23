@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { launchEdge } from "./edge-launcher.mjs";
 
-const baseUrl = process.argv[2] ?? "http://127.0.0.1:8788";
+const baseUrl = process.argv[2] ?? "http://127.0.0.1:8801";
 const STORAGE_KEY = "jobhunt-ops-state-v1";
 
 const profileDir = mkdtempSync(join(tmpdir(), "dsh-ai-cloud-check-"));

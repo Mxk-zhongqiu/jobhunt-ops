@@ -18,7 +18,8 @@
 | 部件 | 位置 | 作用 |
 |---|---|---|
 | 本 SOP | `docs/DATA_UPDATE_SOP.md` | 标准作业流程与字段字典（本文档） |
-| 状态工具 | `scripts/data/state-tools.mjs` | export / validate / backup / apply 四个子命令 |
+| 周计划专用入口 | `docs/WEEKLY_PLAN_SOP.md` + `npm run state:plan` | 周计划高频操作专用（勾选/增删/改文本/改标签） |
+| 状态工具 | `scripts/data/state-tools.mjs` | export / validate / backup / apply / plan 子命令 |
 | 规范状态文件 | `.edge-profile/state.json` | 全量数据的工作副本（= `/data` 页导出的 JSON 格式） |
 | 备份目录 | `.edge-profile/backups/` | 每次改动前的自动快照（保留最近 20 份） |
 
@@ -143,7 +144,7 @@ localStorage 键 **`jobhunt-ops-state-v1`**；登录 Firebase 后同时写云端
 
 ## 3. 标准五步流程（核心）
 
-> 前置条件：应用正在运行（`npm run dev` 或 `npm run dev:full`，默认 **http://127.0.0.1:8788**）；
+> 前置条件：应用正在运行（`npm run dev` 或 `npm run dev:full`，默认 **http://127.0.0.1:8801**）；
 > 浏览器 profile `.edge-profile/` 未被其他 Edge 窗口占用；页面**不在**演示预览模式。
 
 ```
@@ -229,6 +230,9 @@ localStorage 键 **`jobhunt-ops-state-v1`**；登录 Firebase 后同时写云端
 
 ### 4.3 周计划 weeklyPlans
 
+> 💡 **高频操作请直接用周计划专用入口**：[`docs/WEEKLY_PLAN_SOP.md`](WEEKLY_PLAN_SOP.md)（`npm run state:plan`，
+> 勾选/新增/删除/改文本/改标签一条命令，自动备份+校验）。本小节为手动/批量编辑规范。
+
 **勾选任务**：找到 `week` 与任务 `id`，把 `done` 改为 `true` / `false`。
 **新增任务**：往对应周的 `tasks` 追加 `{ "id": "task-1724380000000", "text": "...", "done": false }`（id 周内唯一）。
 **删除任务**：从 `tasks` 移除。**不要删除整个 week**（周次 1–10 固定）。
@@ -266,7 +270,7 @@ localStorage 键 **`jobhunt-ops-state-v1`**；登录 Firebase 后同时写云端
 2. **演示模式绝不写**：`apply` 自动检测「演示预览中」横幅，检测到立即中止；手动路径请先「退出演示」。
 3. **导入是整包覆盖**：`state.json` 必须是**完整 AppState**（七块齐全），禁止只含部分字段——否则会清空其余数据。
 4. **真实数据不入库**：`state.json` 与 `backups/` 位于 `.edge-profile/`（gitignored）；任何导出文件勿提交 git、勿进公网目录。
-5. **云端为准**：登录用户以 Firestore 为真、导入后自动同步；多端/多浏览器以同一 Firebase 账号互通，注意不同 origin（8788 / 4173 / web.app）localStorage 彼此独立。
+5. **云端为准**：登录用户以 Firestore 为真、导入后自动同步；多端/多浏览器以同一 Firebase 账号互通，注意不同 origin（8801 / 4173 / web.app）localStorage 彼此独立。
 6. **校验不过不应用**：`validate` 报错必须修到全绿，禁止带错 apply。
 7. **id 不可复用**：新记录必须用新 id（时间戳前缀）；复用 id 会导致合并错乱。
 8. **同一时刻只允许一个写操作**：apply 期间不要人工在页面同时改数据，避免互相覆盖。

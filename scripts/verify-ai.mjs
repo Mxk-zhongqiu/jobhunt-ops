@@ -35,7 +35,7 @@ expect("前端只调用本地代理", adapter.includes('fetch("/api/ai/deepseek"
 expect("AIService 工厂支持 Mock 与 DeepSeek", services.includes("createAIService") && services.includes("new DeepSeekAdapter") && services.includes("new MockAdapter"));
 expect("提供商默认 Mock 且可切换", seed.includes('aiProvider: "mock"') && workspace.includes("改用本地 Mock"));
 expect("正式写入只在确认分支（复盘写入）", workspace.indexOf("const accept = () =>") < workspace.indexOf("updateInterview("));
-expect("Vite 仅代理本地 AI 路径", vite.includes('"/api/ai": "http://127.0.0.1:8787"'));
+expect("Vite 仅代理本地 AI 路径", vite.includes('"/api/ai": "http://127.0.0.1:8802"'));
 
 // ── 云函数（functions/index.js）安全门禁 ──
 expect("云函数密钥只用环境变量", cloudProxy.includes("process.env.DEEPSEEK_API_KEY") && !/sk-[A-Za-z0-9]{12,}/.test(cloudProxy));

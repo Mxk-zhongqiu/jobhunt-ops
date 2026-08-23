@@ -11,7 +11,7 @@
 //
 // 约定（与 SOP 一致）：
 //   - 规范状态文件：.edge-profile/state.json（gitignored，真实数据不入库）
-//   - 目标 origin：http://127.0.0.1:8788（npm run dev / dev:full）
+//   - 目标 origin：http://127.0.0.1:8801（npm run dev / dev:full）
 //   - 浏览器：本机 Edge + 持久化 profile（.edge-profile/，复用现有自动化基建）
 //   - 应用前自动备份应用内当前状态到 backups/pre-apply-*.json（双保险）
 // ============================================================================
@@ -26,7 +26,7 @@ const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", ".."
 const STATE_FILE = resolve(PROJECT_ROOT, ".edge-profile", "state.json");
 const BACKUP_DIR = resolve(PROJECT_ROOT, ".edge-profile", "backups");
 const STORAGE_KEY = "jobhunt-ops-state-v1";
-const DEFAULT_BASE = "http://127.0.0.1:8788";
+const DEFAULT_BASE = "http://127.0.0.1:8801";
 const DEFAULT_KEEP = 20;
 
 // ─── 枚举字典（与 src/types/domain.ts 保持一致） ─────────────────────────────
@@ -445,6 +445,229 @@ async function cmdApply({ file, base, headless }) {
   }
 }
 
+// ─── plan 子命令：周计划快捷入口（内容与状态修改） ────────────────────────────
+// 文档：docs/WEEKLY_PLAN_SOP.md；写操作统一走「自动备份 → 修改 → 校验 → 写盘」，
+// 之后仍需 state:apply 才会应用到运行中的应用。
+function planCurrentWeek(state) {
+  const start = new Date(`${state.settings.startDate}T00:00:00`);
+  if (Number.isNaN(start.getTime())) return 1;
+  const diffDays = Math.floor((Date.now() - start.getTime()) / 86_400_000);
+  return Math.min(10, Math.max(1, Math.floor(diffDays / 7) + 1));
+}
+
+function planFindWeek(state, week) {
+  return state.weeklyPlans.find((p) => p.week === week) ?? null;
+}
+
+function planResolveWeek(state, a) {
+  if (a.week !== null) {
+    if (!Number.isInteger(a.week) || a.week < 1 || a.week > 10) {
+      console.error(`❌ --week 应为 1–10 的整数，实际：${a.week}`);
+      process.exit(1);
+    }
+    return a.week;
+  }
+  const cur = planCurrentWeek(state);
+  console.log(`ℹ️  未指定 --week，默认当前周：第 ${cur} 周`);
+  return cur;
+}
+
+function planRequireWeek(state, a) {
+  const plan = planFindWeek(state, a.week);
+  if (!plan) {
+    console.error(`❌ 未找到第 ${a.week} 周计划（week 范围 1–10）。`);
+    process.exit(1);
+  }
+  return plan;
+}
+
+function planList(state, week) {
+  const cur = planCurrentWeek(state);
+  console.log(`📅 当前周：第 ${cur} 周（按 settings.startDate=${state.settings.startDate} 计算）`);
+  const plans = week ? state.weeklyPlans.filter((p) => p.week === week) : state.weeklyPlans;
+  if (!plans.length) {
+    console.error(`❌ 没有周次为 ${week} 的周计划。`);
+    process.exit(1);
+  }
+  for (const plan of plans) {
+    const doneCount = plan.tasks.filter((t) => t.done).length;
+    console.log(`W${plan.week} ${plan.label}（${doneCount}/${plan.tasks.length} 完成）`);
+    for (const t of plan.tasks) {
+      console.log(`  ${t.done ? "[x]" : "[ ]"} ${t.id} ${t.text}`);
+    }
+  }
+}
+
+function planWriteBack(state, file) {
+  const list = validateState(state);
+  if (list.length > 0) {
+    console.error(`❌ 修改后校验失败（${list.length} 处），未写盘，state.json 保持原样：`);
+    for (const e of list) console.error(`   - ${e}`);
+    return false;
+  }
+  writeFileSync(file, JSON.stringify(state, null, 2) + "\n", "utf8");
+  console.log(`✅ 已写入 ${file}`);
+  printSummary(state);
+  console.log(`   ▶ 下一步：npm run state:apply 把改动应用到应用（自动备份应用内现状 + 导入 + 验证）`);
+  return true;
+}
+
+function planCheck(state, a) {
+  const plan = planRequireWeek(state, a);
+  const ids = (a.task ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!ids.length) {
+    console.error("❌ 缺少任务 id（--task <id>，多个用逗号分隔，如 --task w3t1,w3t2）。");
+    process.exit(1);
+  }
+  for (const id of ids) {
+    const t = plan.tasks.find((x) => x.id === id);
+    if (!t) {
+      console.error(`❌ 第 ${a.week} 周没有任务 id「${id}」。可用任务：`);
+      for (const x of plan.tasks) console.error(`   - ${x.id} ${x.text}`);
+      process.exit(1);
+    }
+    const next = a.done === null ? !t.done : a.done;
+    t.done = next;
+    console.log(`☑️  ${t.id}「${t.text}」→ ${next ? "已完成 [x]" : "未完成 [ ]"}`);
+  }
+}
+
+function planAdd(state, a) {
+  const plan = planRequireWeek(state, a);
+  const text = (a.text ?? "").trim();
+  if (!text) {
+    console.error('❌ 缺少任务文本（--text "任务内容"）。');
+    process.exit(1);
+  }
+  const dup = plan.tasks.find((x) => x.text === text);
+  if (dup) console.warn(`⚠️ 该周已有相同文本任务（${dup.id}），仍会新增一条。`);
+  const id = `task-${Date.now()}`;
+  plan.tasks.push({ id, text, done: false });
+  console.log(`➕ 已新增任务：${id}「${text}」（第 ${a.week} 周，未完成）`);
+}
+
+function planRemove(state, a) {
+  const plan = planRequireWeek(state, a);
+  const idx = plan.tasks.findIndex((x) => x.id === a.task);
+  if (idx < 0) {
+    console.error(`❌ 第 ${a.week} 周没有任务 id「${a.task}」。可用任务：`);
+    for (const x of plan.tasks) console.error(`   - ${x.id} ${x.text}`);
+    process.exit(1);
+  }
+  const [removed] = plan.tasks.splice(idx, 1);
+  console.log(`🗑️  已删除任务：${removed.id}「${removed.text}」`);
+}
+
+function planEdit(state, a) {
+  const plan = planRequireWeek(state, a);
+  const t = plan.tasks.find((x) => x.id === a.task);
+  if (!t) {
+    console.error(`❌ 第 ${a.week} 周没有任务 id「${a.task}」。可用任务：`);
+    for (const x of plan.tasks) console.error(`   - ${x.id} ${x.text}`);
+    process.exit(1);
+  }
+  const text = (a.text ?? "").trim();
+  if (!text) {
+    console.error('❌ 缺少新文本（--text "新内容"）。');
+    process.exit(1);
+  }
+  console.log(`✏️  任务 ${t.id}：${t.text} → ${text}`);
+  t.text = text;
+}
+
+function planLabel(state, a) {
+  const plan = planRequireWeek(state, a);
+  const text = (a.text ?? "").trim();
+  if (!text) {
+    console.error('❌ 缺少新标签（--text "新标签"）。');
+    process.exit(1);
+  }
+  console.log(`🏷️  第 ${a.week} 周标签：${plan.label} → ${text}`);
+  plan.label = text;
+}
+
+function parsePlanArgs(raw) {
+  const a = { action: raw[0], week: null, task: null, text: null, done: null, file: STATE_FILE, keep: DEFAULT_KEEP, noBackup: false, help: false };
+  for (let i = 1; i < raw.length; i++) {
+    const k = raw[i];
+    if (k === "--week") a.week = Number(raw[++i]);
+    else if (k === "--task") a.task = raw[++i] ?? "";
+    else if (k === "--text") a.text = raw[++i] ?? "";
+    else if (k === "--done") a.done = String(raw[++i]).toLowerCase() === "true";
+    else if (k === "--file") a.file = resolve(PROJECT_ROOT, raw[++i] ?? "");
+    else if (k === "--keep") a.keep = Number(raw[++i]) || DEFAULT_KEEP;
+    else if (k === "--no-backup") a.noBackup = true;
+    else if (k === "--help" || k === "-h") a.help = true;
+    else {
+      console.error(`未知参数：${k}`);
+      a.help = true;
+    }
+  }
+  return a;
+}
+
+function printPlanHelp() {
+  console.log(`周计划快捷入口（内容与状态修改）—— 直接改 .edge-profile/state.json
+
+用法：
+  npm run state:plan -- <操作> [选项]
+
+操作：
+  list                     列出全部周计划任务与勾选状态（--week 3 只看第 3 周）
+  check --task <id>        勾选/取消任务（默认切换；--done true|false 显式指定；多个用逗号分隔）
+  add --text "..."         新增任务（自动生成 id，未完成）
+  remove --task <id>       删除任务
+  edit --task <id> --text "..."   修改任务文本
+  label --text "..."       修改周标签
+
+选项：
+  --week <1-10>      目标周次（写操作未指定时默认当前周，按 settings.startDate 计算）
+  --task <id>        任务 id（list 输出中可见）
+  --text "..."       文本内容
+  --done <true|false>  check 时显式设定状态（缺省为切换）
+  --file <path>      状态文件（默认 .edge-profile/state.json）
+  --no-backup        跳过修改前自动备份（仅批量场景谨慎使用）
+
+每次写操作自动：备份 → 修改 → 校验 → 写盘；随后运行 npm run state:apply 应用到应用。
+详见 docs/WEEKLY_PLAN_SOP.md`);
+}
+
+async function cmdPlan(raw) {
+  const a = parsePlanArgs(raw);
+  if (a.help || !a.action || a.action === "help") {
+    printPlanHelp();
+    process.exit(a.help || a.action === "help" ? 0 : 1);
+  }
+  const WRITE_ACTIONS = ["check", "add", "remove", "edit", "label"];
+  const state = readStateFile(a.file);
+
+  if (a.action === "list") {
+    planList(state, a.week);
+    process.exit(0);
+  }
+  if (!WRITE_ACTIONS.includes(a.action)) {
+    console.error(`未知操作：${a.action}`);
+    printPlanHelp();
+    process.exit(1);
+  }
+
+  a.week = planResolveWeek(state, a);
+  if (!a.noBackup) cmdBackup({ file: a.file, keep: a.keep }); // 修改前自动备份
+
+  switch (a.action) {
+    case "check": planCheck(state, a); break;
+    case "add": planAdd(state, a); break;
+    case "remove": planRemove(state, a); break;
+    case "edit": planEdit(state, a); break;
+    case "label": planLabel(state, a); break;
+  }
+  if (!planWriteBack(state, a.file)) process.exit(1);
+  process.exit(0);
+}
+
 // ─── CLI 解析 ────────────────────────────────────────────────────────────────
 function parseArgs(argv) {
   const args = { file: STATE_FILE, base: DEFAULT_BASE, out: STATE_FILE, headless: false, keep: DEFAULT_KEEP, help: false };
@@ -483,18 +706,24 @@ function printHelp() {
 选项：
   --file <path>   状态文件路径（默认 .edge-profile/state.json）
   --out <path>    export 输出路径（默认同 state.json）
-  --base <url>    应用地址（默认 http://127.0.0.1:8788）
+  --base <url>    应用地址（默认 http://127.0.0.1:8801）
   --headless      Edge 无头运行（apply/export）
   --keep <n>      backup 保留份数（默认 20）
 
 前置条件：
-  - 应用正在运行（npm run dev 或 npm run dev:full → 8788）
+  - 应用正在运行（npm run dev 或 npm run dev:full → 8801）
   - 浏览器 profile .edge-profile 未被其他 Edge 窗口占用
   - 完整流程见 docs/DATA_UPDATE_SOP.md`);
 }
 
 // ─── 入口 ────────────────────────────────────────────────────────────────────
-const args = parseArgs(process.argv.slice(2));
+const rawArgv = process.argv.slice(2);
+if (rawArgv[0] === "plan") {
+  // 周计划快捷入口（独立参数解析，见 docs/WEEKLY_PLAN_SOP.md）
+  await cmdPlan(rawArgv.slice(1));
+  process.exit(0);
+}
+const args = parseArgs(rawArgv);
 if (args.help || !args.cmd) {
   printHelp();
   process.exit(args.help ? 0 : 1);

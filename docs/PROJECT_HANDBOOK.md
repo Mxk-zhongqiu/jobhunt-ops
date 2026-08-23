@@ -31,8 +31,8 @@
 | 图标 | lucide-react | |
 | 样式 | **原生 CSS**（`src/styles/globals.css`，无 UI 框架） | 保持轻量 |
 | 包管理 | **npm**（本机无 pnpm） | 锁文件 `package-lock.json` |
-| 前端端口 | **8788** | 见 §10.1 端口问题 |
-| AI 代理端口 | **8787**（127.0.0.1） | `server/deepseek-proxy.mjs` |
+| 前端端口 | **8801** | 见 §10.1 端口问题 |
+| AI 代理端口 | **8802**（127.0.0.1） | `server/deepseek-proxy.mjs` |
 | Node | v22+ | |
 
 ---
@@ -43,7 +43,7 @@
 F:\jobhunt-ops\
 ├── index.html                  # 入口 HTML（zh-CN，标题"求职作战台 · 2026 秋招"）
 ├── package.json                # 脚本：dev / dev:full / ai:proxy / build / build:demo / deploy / preview / verify / state:*
-├── vite.config.ts              # host=127.0.0.1, port=8788, proxy /api/ai → 127.0.0.1:8787, base="./", firebase manualChunks
+├── vite.config.ts              # host=127.0.0.1, port=8801, proxy /api/ai → 127.0.0.1:8802, base="./", firebase manualChunks
 ├── tsconfig.json / app / node  # TS 严格模式工程引用
 ├── .env.example                # DEEPSEEK_* 本地密钥模板 + VITE_FIREBASE_* 公网配置模板
 ├── .gitignore                  # 含 .env / .env.*.local / functions/node_modules / .firebase（密钥绝不入库）
@@ -195,7 +195,7 @@ AIWorkspace（选提供商 → 选能力 → 勾选上下文/复盘对象 → �
    └─ service.generate({capability, context, userInstruction})
         ├─ MockAdapter（本地规则，300ms 假延迟，不联网）
         └─ DeepSeekAdapter → fetch("/api/ai/deepseek")
-                └─(Vite proxy)→ 127.0.0.1:8787（server/deepseek-proxy.mjs）
+                └─(Vite proxy)→ 127.0.0.1:8802（server/deepseek-proxy.mjs）
                         └─ DeepSeek Chat Completions（json_object, thinking disabled）
    → AIProposal（含 contextSummary / payload / 状态 draft）
    → ProposalReview：可编辑 → 确认/拒绝/重来
@@ -233,7 +233,7 @@ AIWorkspace（选提供商 → 选能力 → 勾选上下文/复盘对象 → �
 14. AIService 工厂支持 Mock 与 DeepSeek
 15. 提供商默认 Mock 且可切换（seed `aiProvider:"mock"` + UI "改用本地 Mock"）
 16. 正式写入只在确认分支（`const accept` 出现在 `updateInterview(` 之前）
-17. Vite 仅代理本地 AI 路径（`/api/ai` → 127.0.0.1:8787）
+17. Vite 仅代理本地 AI 路径（`/api/ai` → 127.0.0.1:8802）
 
 ---
 
@@ -251,8 +251,8 @@ AIWorkspace（选提供商 → 选能力 → 勾选上下文/复盘对象 → �
 
 ```bash
 npm install          # 安装依赖（锁文件 package-lock.json）
-npm run dev          # 仅前端 → http://127.0.0.1:8788（未配置 Firebase 时=本地模式）
-npm run dev:full     # ★ 本地推荐：AI 代理(8787) + 前端(8788) 一条命令
+npm run dev          # 仅前端 → http://127.0.0.1:8801（未配置 Firebase 时=本地模式）
+npm run dev:full     # ★ 本地推荐：AI 代理(8802) + 前端(8801) 一条命令
 npm run dev:full -- --port 8789   # 换端口（dev-full 透传 vite 参数）
 npm run ai:proxy     # 只起代理
 npm run build        # 生产构建：tsc -b（严格检查） + vite build → dist/（真实种子数据 + Firebase 云同步）
@@ -268,7 +268,7 @@ cd functions && npm install && cd ..   # 云函数依赖（仅 Blaze 备选方�
 
 ## 10. 已知问题与决策记录（改代码前必读）
 
-1. **端口**：5173 落在本机 Windows 保留端口段（Hyper-V 保留 5141–5240，`netsh interface ipv4 show excludedportrange protocol=tcp` 可查），绑定即 EACCES。因此前端用 **8788**、AI 代理 **8787**，且 `vite.config.ts` 显式 `host:"127.0.0.1"`（避开 ::1）。**不要改回 5173**；换端口用 `--port` 参数。
+1. **端口**：5173 落在本机 Windows 保留端口段（Hyper-V 保留 5141–5240，`netsh interface ipv4 show excludedportrange protocol=tcp` 可查），绑定即 EACCES。因此前端用 **8801**、AI 代理 **8802**，且 `vite.config.ts` 显式 `host:"127.0.0.1"`（避开 ::1）。**不要改回 5173**；换端口用 `--port` 参数。
 2. **年份差异**：秋招文档快照写 "2025-08-18"，而本机系统时钟为 2026-08-18。种子 `settings.startDate="2026-08-18"` 使"今天=第 1 周"成立。若实际日期不同，改 startDate 即自动校准周次。
 3. **持久化语义**：未登录时 localStorage 是唯一存储（清浏览器数据即丢数据，`/data` 导出备份是刚需）；登录后本地 + 云端 Firestore 双写（云端为真、本地为备份，见 §14）。新增字段走 `mergeState`（settings 浅合并，数组以存储为准）；云端文档整份覆盖（`replace-state`），字段缺失有兜底。
 4. **seed 是真实数据**：12 家冲刺层公司、W1–W10、两个项目、24 个知识主题均来自策略文档，可自由增删改，但**已初始化过 localStorage 的用户不会自动拿到 seed 改动**（数组以存储为准）；如需推送新种子，需在 merge 逻辑或版本迁移上处理。
@@ -296,7 +296,7 @@ cd functions && npm install && cd ..   # 云函数依赖（仅 Blaze 备选方�
 ## 12. 新会话快速上手指引（给接手开发的 Agent）
 
 1. **先读**：`README.md` → 本文档 §4/§5/§7（模型/数据流/AI）→ 再看要改的页面文件；
-2. **环境**：代码在 `F:\jobhunt-ops`（npm 项目）；本机 Node v22；端口 8788/8787；
+2. **环境**：代码在 `F:\jobhunt-ops`（npm 项目）；本机 Node v22；端口 8801/8802；
 3. **改前验证**：`npm run build` 必须通过（strict TS）；涉及 AI 的文件改动后 `npm run verify`；
 4. **改动套路**：见 §5"新增能力套路"；保持红线（本地持久化 / 确认后写入 / 账号数据隔离 + AI 白名单）；
 5. **提交规范**：`git add -A && git commit`（local 签名，仓库已初始化 main 分支，4 个历史提交可参考）；
@@ -359,7 +359,7 @@ cd functions && npm install && cd ..   # 云函数依赖（仅 Blaze 备选方�
 
 | 环境 | 路径 | 密钥位置 |
 |---|---|---|
-| 开发（`import.meta.env.DEV`） | `fetch("/api/ai/deepseek")` → Vite 代理 → 本地代理 8787 | `.env`（本机） |
+| 开发（`import.meta.env.DEV`） | `fetch("/api/ai/deepseek")` → Vite 代理 → 本地代理 8802 | `.env`（本机） |
 | 生产 | `fetch(VITE_AI_PROXY_URL + "/deepseek")` → Cloudflare Worker | Worker 环境变量 |
 
 - 生产路径要求登录：`getIdToken()` 取 Firebase ID Token 放 `Authorization: Bearer`；Worker 用 identitytoolkit `accounts:lookup` 校验（无需 Admin SDK）；错误码直接透传（AUTH_REQUIRED / AI_NOT_CONFIGURED_CLOUD / RATE_LIMITED…）；
