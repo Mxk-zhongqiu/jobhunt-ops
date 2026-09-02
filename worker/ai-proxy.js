@@ -39,6 +39,15 @@ function schemaInstruction(capability) {
   if (capability === "knowledge") {
     return `${shared} 格式：{"kind":"knowledge","topicName":"目标主题名","points":[{"title":"知识点名","summary":"核心要点，≤2 句（含公式/结论/面试答法）","depth":"基础或进阶，可不填"}]}；生成 6–12 个知识点，覆盖该主题核心考点，结合授权上下文中的已有知识点避免重复；summary 务必精简，控制总输出长度。`;
   }
+  if (capability === "rewrite") {
+    return `${shared} 格式：{"kind":"rewrite","style":"目标岗位语言风格","original":"原文（与用户提供一致）","rewritten":"改写后的岗位语言版本，保留真实事实不夸大，要点式表达","notes":"1 条改写说明"}`;
+  }
+  if (capability === "greeting") {
+    return `${shared} 格式：{"kind":"greeting","drafts":["...","...","..."],"notes":"1 条说明"}；3 版需各有侧重（简洁礼貌 / 突出与 JD 相关的经历 / 主动邀约沟通），单版 ≤140 字，不夸大简历事实，称呼与语气自然。`;
+  }
+  if (capability === "reply") {
+    return `${shared} 格式：{"kind":"reply","drafts":["...","...","..."],"notes":"1 条说明"}；先判断 HR 消息意图（约面试/笔试邀请/要材料/待推进/婉拒等），回复要得体并给出可执行的下一步，单版 ≤200 字。`;
+  }
   return `${shared} 格式：{"kind":"answer","content":"..."}`;
 }
 
@@ -89,7 +98,7 @@ async function callDeepSeek(payload, env) {
     messages: [
       {
         role: "system",
-        content: `你是“求职作战台”的求职辅助助手，服务于 2026 届量化秋招。只能依据用户本次授权的上下文回答；不得声称已修改系统；不提供投资或法律决策；面试复盘只做结构化总结，不做主观评价定性。${schemaInstruction(payload.request?.capability)}`,
+        content: `你是“求职作战台”的求职辅助助手，服务于 2026 届量化秋招。只能依据用户本次授权的上下文回答；不得声称已修改系统；不提供投资或法律决策；面试复盘只做结构化总结，不做主观评价定性。起草话术时只依据授权上下文中的 JD/HR 消息/简历摘要，不得编造未提供的经历；所有话术均为待用户确认的草稿，不得引导自动发送。${schemaInstruction(payload.request?.capability)}`,
       },
       {
         role: "user",
