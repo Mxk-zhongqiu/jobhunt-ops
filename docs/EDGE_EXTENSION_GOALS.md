@@ -91,4 +91,12 @@
 - **Edge 插件 v0.1**（`extension/`）：MV3 清单、`background.js`（Firebase Auth REST 登录/刷新 + Firestore REST 只写本人 `states/{uid}`、新增去重、状态更新与网页端同规则）、`popup`（登录 / 从当前页提取 / 新增 / 更新状态）、`content/extract.js`（Boss直聘/猎聘 JSON-LD/DOM/标题三级提取，确认后才写）；`npm run ext:config` 由 `.env` 生成 `extension/config.js`（gitignored）。
 - 安装与红线说明见 `extension/README.md`。
 
-状态：✅ 已通过全仓 `npm run build`（tsc strict + vite）并随 P0 提交入库（2026-09-02）。后续 P1（AI 写手）按 §7 推进。
+### P1 · AI 写手（2026-09-02 已实现，commit cace633…4522c50）
+
+- **云端**：`worker/ai-proxy.js` 新增 `greeting`/`reply` 能力分支（JSON 输出 3 版草稿 + notes，系统提示收紧「不编造、待确认」）；verify 37 项全绿。**需部署 Worker 后生效**。
+- **实测前提**（见 `docs/EDGE_EXTENSION_P1_DESIGN.md` §9）：CDP/Playwright 对 BOSS/猎聘 被反爬拦截（about:blank/崩溃），P1 只走真实会话内扩展通道；实测 job_detail 页 JD 全文可读、公司名 DOM 脱敏（以标题解析优先）、直聊 contenteditable 注入可行。
+- **插件 v0.2**：`lib/parsers.js` 纯函数库（标题解析/页面分类/工具条过滤/版本推荐/简历摘要，node:test 9 项）；content 类型化采集（job_detail/chat）+ `jobhunt-fill` 只填不发送；background 本人 `resumes/{uid}` 读取 → 版本自动推荐 → 摘要投影 → Worker 直调生成；popup「④ AI 写手」卡（模式/语气/抓取/3 版草稿/填入或复制）。
+- **附带修复**：background Firestore REST URL 曾重复 `/documents` 致 404，已按集合修正（P0 插件云同步由此真正可用）。
+- 使用与降级说明见 `extension/README.md` P1 一节；浏览器侧验收待做：部署 Worker → 重载扩展 → job_detail 打招呼 / 会话页回复 全链路手测。
+
+状态：✅ P0 已提交（2026-09-02，含全仓 `npm run build` 验证）；✅ P1 代码已提交、门禁/单测通过；⏳ Worker 部署 + 浏览器侧全链路验收由用户在真机执行（步骤见 `extension/README.md`）。
