@@ -110,6 +110,51 @@
       </div>
     </section>
 
+    <!-- ④ AI 写手（P1：打招呼语 / HR 回复建议，草稿确认后才填框） -->
+    <section class="card">
+      <div class="card-title">
+        <h2>④ AI 写手</h2>
+        <button type="button" class="btn ghost small" id="aiExtractBtn">从当前页抓取</button>
+      </div>
+      <div class="stack">
+        <div class="grid2">
+          <label>模式
+            <select id="aiMode">
+              <option value="greeting">打招呼语（JD × 简历）</option>
+              <option value="reply">回复建议（HR 消息 × 简历）</option>
+            </select>
+          </label>
+          <label>语气
+            <select id="aiTone">
+              <option value="quant">量化专业</option>
+              <option value="concise">简洁礼貌</option>
+              <option value="warm">热情主动</option>
+            </select>
+          </label>
+        </div>
+        <div class="grid2">
+          <label>岗位<input id="aiPosition" placeholder="自动抓取或手填" /></label>
+          <label>公司<input id="aiCompany" placeholder="可改（以页面标题为准）" /></label>
+        </div>
+        <label>简历版本（自动按岗位推荐）
+          <select id="aiVersion"><option value="">（点击「从当前页抓取」或登录后加载）</option></select>
+        </label>
+        <div id="aiJdBlock">
+          <label>JD 摘要（自动抓取，可改）
+            <textarea id="aiJd" rows="4" maxlength="1500" placeholder="job_detail 页会自动抓取 JD 全文"></textarea>
+          </label>
+        </div>
+        <div id="aiHrBlock" hidden>
+          <label>HR 最新消息（自动抓取，抓不到请粘贴）
+            <textarea id="aiHr" rows="3" maxlength="800" placeholder="例如：你好，有量化交易的实践基础吗？"></textarea>
+          </label>
+        </div>
+        <button type="button" class="btn primary" id="aiGenBtn">生成 3 版草稿</button>
+        <p id="aiNote" class="hint" hidden></p>
+        <div id="aiDraftList"></div>
+      </div>
+    </section>
+
     <p id="result" class="result" hidden></p>
     <p class="footnote">数据写入的是你在 https://obs.jobhunt.top 的账号云端；网页端打开时会自动同步显示。</p>
   </main>

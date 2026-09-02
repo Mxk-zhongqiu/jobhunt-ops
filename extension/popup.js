@@ -40,6 +40,19 @@ const elements = {
   probeRunBtn: $("probeRunBtn"),
   probeWriteCb: $("probeWriteCb"),
   probeOut: $("probeOut"),
+  aiExtractBtn: $("aiExtractBtn"),
+  aiMode: $("aiMode"),
+  aiTone: $("aiTone"),
+  aiPosition: $("aiPosition"),
+  aiCompany: $("aiCompany"),
+  aiVersion: $("aiVersion"),
+  aiJdBlock: $("aiJdBlock"),
+  aiJd: $("aiJd"),
+  aiHrBlock: $("aiHrBlock"),
+  aiHr: $("aiHr"),
+  aiGenBtn: $("aiGenBtn"),
+  aiNote: $("aiNote"),
+  aiDraftList: $("aiDraftList"),
   result: $("result"),
 };
 
@@ -329,6 +342,192 @@ async function runDomProbe() {
   }
 }
 
+// ─── ④ AI 写手 ───
+
+let aiExtractData = null;
+let aiVersions = [];
+
+function showAiNote(text) {
+  elements.aiNote.hidden = !text;
+  elements.aiNote.textContent = text || "";
+}
+
+function syncAiModeUi() {
+  const mode = elements.aiMode.value;
+  elements.aiJdBlock.hidden = mode !== "greeting";
+  elements.aiHrBlock.hidden = mode !== "reply";
+}
+
+async function ensureAiVersions(hintText) {
+  const res = await callBackground("suggestResumeVersion", { hint: (hintText || "").slice(0, 120) });
+  const select = elements.aiVersion;
+  if (!res.ok) {
+    select.innerHTML = '<option value="">（读取失败）</option>';
+    showAiNote(res.code === "AUTH_REQUIRED" ? "请先在顶部登录作战台账号" : res.error || "读取简历版本失败");
+    return false;
+  }
+  const versions = res.versions || [];
+  aiVersions = versions;
+  select.innerHTML = "";
+  if (res.empty || !versions.length) {
+    const o = document.createElement("option");
+    o.value = "";
+    o.textContent = "（云端暂无简历版本）";
+    select.appendChild(o);
+    showAiNote("云端还没有简历：请先在 obs.jobhunt.top 登录并保存简历后再用 AI 写手");
+    return false;
+  }
+  for (const v of versions) {
+    const o = document.createElement("option");
+    o.value = v.id;
+    o.textContent = v.name + (v.id === res.versionId ? "（推荐）" : "");
+    select.appendChild(o);
+  }
+  select.value = res.versionId || versions[0].id || "";
+  showAiNote(res.versionId && res.reason ? `版本推荐：${res.reason}` : "未自动匹配到版本，请手动选择");
+  return true;
+}
+
+async function aiExtractForDrafts() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab || !tab.id) {
+    showResult("err", "找不到当前标签页");
+    return;
+  }
+  try {
+    const res = await chrome.tabs.sendMessage(tab.id, { type: "jobhunt-extract" });
+    if (!res || !res.ok) throw new Error(res && res.error ? res.error : "无响应：请确认在 BOSS直聘/猎聘 页面");
+    const d = res.data || {};
+    aiExtractData = d;
+    const capture = d.capture || {};
+    const position = d.pageType === "job_detail" ? capture.position : d.position || capture.position;
+    if (position) elements.aiPosition.value = position;
+    if (capture.company) elements.aiCompany.value = capture.company;
+    if (d.pageType === "job_detail" && capture.jdText) elements.aiJd.value = capture.jdText;
+    if (d.pageType === "chat" && d.message && d.message.text && !elements.aiHr.value.trim()) {
+      elements.aiHr.value = d.message.text;
+    }
+    const bits = [];
+    if (d.pageType === "job_detail") {
+      bits.push("已抓取岗位/JD");
+      if (capture.companyFromTitle) bits.push("公司按页面标题：" + capture.companyFromTitle);
+      else if (!capture.company) bits.push("未识别公司，请手填");
+    } else if (d.pageType === "chat") {
+      bits.push(d.message && d.message.source === "auto" ? "已抓取最后一条 HR 消息" : "未能自动抓取 HR 消息，请手动粘贴");
+      if (d.position) bits.push("岗位：" + d.position);
+    } else {
+      bits.push("当前页不是岗位/会话页，请手动填写");
+    }
+    showAiNote(bits.join("；"));
+    if (!aiVersions.length || elements.aiVersion.options.length <= 1) {
+      await ensureAiVersions(position + " " + (capture.jdText || d.jd || ""));
+    }
+  } catch (err) {
+    showAiNote("抓取失败：" + (err && err.message ? err.message : err));
+  }
+}
+
+async function aiGenerateDrafts() {
+  const mode = elements.aiMode.value;
+  const position = elements.aiPosition.value.trim();
+  const company = elements.aiCompany.value.trim();
+  const jdText = elements.aiJd.value.trim();
+  const hrMessage = elements.aiHr.value.trim();
+  if (mode === "greeting" && !position && !jdText) {
+    showResult("err", "打招呼需要岗位或 JD（点「从当前页抓取」或手填）");
+    return;
+  }
+  if (mode === "reply" && !hrMessage) {
+    showResult("err", "回复建议需要 HR 消息文本（自动抓不到就手动粘贴）");
+    return;
+  }
+  elements.aiGenBtn.disabled = true;
+  elements.aiGenBtn.textContent = "生成中…";
+  showAiNote("正在生成 3 版草稿（约 5–15 秒）…");
+  const res = await callBackground("aiGenerate", {
+    mode,
+    jd: { position, company, jdText },
+    hrMessage,
+    versionId: elements.aiVersion.value || undefined,
+    tone: elements.aiTone.value,
+  });
+  elements.aiGenBtn.disabled = false;
+  elements.aiGenBtn.textContent = "生成 3 版草稿";
+  if (!res.ok) {
+    showResult("err", res.error || "生成失败");
+    if (res.code === "AUTH_REQUIRED") await refreshSessionUi();
+    if (res.code === "RESUME_EMPTY") await ensureAiVersions(position);
+    return;
+  }
+  renderAiDrafts(res.drafts || [], res.notes || "");
+}
+
+function renderAiDrafts(drafts, notes) {
+  const box = elements.aiDraftList;
+  box.innerHTML = "";
+  showAiNote(notes || "");
+  drafts.forEach((draft, index) => {
+    const row = document.createElement("div");
+    row.className = "ai-draft";
+    const head = document.createElement("div");
+    head.className = "ai-draft-head";
+    const label = document.createElement("span");
+    label.textContent = `草稿 ${index + 1}`;
+    const buttons = document.createElement("span");
+    buttons.className = "ai-draft-btns";
+    const fillBtn = document.createElement("button");
+    fillBtn.type = "button";
+    fillBtn.className = "btn primary small";
+    fillBtn.textContent = "填入输入框";
+    const copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.className = "btn ghost small";
+    copyBtn.textContent = "复制";
+    buttons.append(fillBtn, copyBtn);
+    head.append(label, buttons);
+    const textarea = document.createElement("textarea");
+    textarea.className = "ai-draft-text";
+    textarea.rows = 4;
+    textarea.value = draft;
+    fillBtn.addEventListener("click", () => aiFillIntoPage(textarea.value));
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(textarea.value);
+        showAiNote("已复制草稿 " + (index + 1) + "，发送前请人工核对");
+      } catch (_) {
+        showResult("err", "复制失败，请手动选择文本复制");
+      }
+    });
+    row.append(head, textarea);
+    box.appendChild(row);
+  });
+  showResult("ok", `已生成 ${drafts.length} 版草稿——均为建议，核对后由你发送`);
+}
+
+async function aiFillIntoPage(text) {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab || !tab.id) {
+    showResult("err", "找不到当前标签页");
+    return;
+  }
+  try {
+    const res = await chrome.tabs.sendMessage(tab.id, { type: "jobhunt-fill", text });
+    if (!res || !res.ok) throw new Error(res && res.error ? res.error : "无响应：请在 BOSS直聘 会话页使用");
+    if (res.filled) {
+      showResult("ok", "已填入输入框——请人工核对后按 Enter 发送（扩展不会替你发送）");
+    } else {
+      try {
+        await navigator.clipboard.writeText(text);
+        showAiNote("未能自动填入（" + (res.reason || "未知原因") + "），已复制：请手动粘贴后发送");
+      } catch (_) {
+        showAiNote("未能自动填入（" + (res.reason || "未知原因") + "），请手动复制粘贴");
+      }
+    }
+  } catch (err) {
+    showAiNote("填入失败：" + (err && err.message ? err.message : err));
+  }
+}
+
 // ─── 事件绑定与初始化 ───
 
 function init() {
@@ -344,6 +543,10 @@ function init() {
   elements.refreshListBtn.addEventListener("click", () => loadCandidates(""));
   elements.applyStatusBtn.addEventListener("click", handleApplyStatus);
   elements.probeRunBtn.addEventListener("click", runDomProbe);
+  elements.aiMode.addEventListener("change", syncAiModeUi);
+  elements.aiExtractBtn.addEventListener("click", aiExtractForDrafts);
+  elements.aiGenBtn.addEventListener("click", aiGenerateDrafts);
+  syncAiModeUi();
   elements.fJd.addEventListener("input", () => {
     elements.jdChars.textContent = String(elements.fJd.value.length);
   });
