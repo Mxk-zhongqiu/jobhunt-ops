@@ -199,6 +199,20 @@
     }
   }
 
+  // 正文可见性：在疑似 JD/详情/描述的容器里找文本最长者（判断岗位 JD 正文是否真实渲染在 DOM）
+  function longestKeywordText(keywords) {
+    let best = { len: 0, sample: "" };
+    const all = document.querySelectorAll("div,section,article");
+    for (const el of all) {
+      const raw = el.className;
+      const cls = typeof raw === "string" ? raw : raw && raw.baseVal !== undefined ? raw.baseVal : "";
+      if (!keywords.some((keyword) => cls.includes(keyword))) continue;
+      const text = visibleText(el);
+      if (text.length > best.len) best = { len: text.length, sample: text.slice(0, 160) };
+    }
+    return best;
+  }
+
   function runDomProbe(writeTest) {
     const count = (selector) => {
       try {
@@ -264,6 +278,17 @@
         ldJsonCount: count('script[type="application/ld+json"]'),
         marker,
       },
+      jdAreaText: longestKeywordText([
+        "job-sec",
+        "job-detail",
+        "job-desc",
+        "jobDesc",
+        "job-intro",
+        "description-text",
+        "desc",
+        "detail",
+        "introduce",
+      ]),
       extraction: {
         company: extractPage().company || "",
         position: extractPage().position || "",
