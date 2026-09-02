@@ -1,7 +1,8 @@
-import { BookOpen, Bot, CalendarCheck, FolderKanban, HardDriveDownload, LayoutDashboard, ListChecks, Menu, MessageSquareText, Send, type LucideIcon } from "lucide-react";
+import { BarChart3, BookOpen, Bot, CalendarCheck, FileText, FolderKanban, HardDriveDownload, LayoutDashboard, ListChecks, Menu, MessageSquareText, Send, type LucideIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { AuthWidget } from "../auth/AuthWidget";
+import { SyncClaims } from "../auth/SyncClaims";
 import { currentWeek, useAppData } from "../../store/appStore";
 
 interface NavItem {
@@ -13,6 +14,8 @@ interface NavItem {
 const navItems: NavItem[] = [
   { path: "/", label: "作战总览", icon: LayoutDashboard },
   { path: "/applications", label: "投递追踪", icon: Send },
+  { path: "/stats", label: "投递统计", icon: BarChart3 },
+  { path: "/resume", label: "简历", icon: FileText },
   { path: "/plan", label: "周计划", icon: CalendarCheck },
   { path: "/projects", label: "项目", icon: FolderKanban },
   { path: "/knowledge", label: "知识", icon: BookOpen },
@@ -75,6 +78,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <AuthWidget />
           </div>
         </header>
+        <SyncClaims />
         {previewDemo && (
           <div className="demo-banner">⚠️ 演示预览中：当前展示虚构演示数据，仅供截图/展示，操作不写入本地与云端</div>
         )}

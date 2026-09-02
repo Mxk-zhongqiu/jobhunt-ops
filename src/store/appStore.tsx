@@ -4,10 +4,12 @@ import { createSeedState } from "../data/seed";
 import { createDemoState } from "../data/demoSeed";
 import { db, firebaseEnabled, loginUser, logoutUser, registerUser, subscribeAuth, type SyncUser } from "../services/firebase";
 import { isAppState } from "../utils/io";
+import { readJson, removeKey, stateKey, writeJson, contentEquals } from "../utils/storage";
 import type {
   AppSettings,
   AppState,
   Application,
+  ApplicationStatus,
   InterviewLog,
   KnowledgePoint,
   KnowledgeTopic,
@@ -17,8 +19,6 @@ import type {
   TopicStatus,
   WeeklyPlan,
 } from "../types/domain";
-
-const STORAGE_KEY = "jobhunt-ops-state-v1";
 
 /** 云同步状态：unsupported=未配置云端；local=未登录本地模式；syncing=同步中；synced=已同步；error=同步出错 */
 export type SyncStatus = "unsupported" | "local" | "syncing" | "synced" | "error";
@@ -82,28 +82,68 @@ function mergeState(seed: AppState, stored: Partial<AppState> | null): AppState 
   };
 }
 
-function loadState(): AppState {
+/** 读取指定本地槽并合并种子兜底（游客槽或某账号槽通用） */
+function loadStateFromKey(key: string): AppState {
   const seed = createSeedState();
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return seed;
-    return mergeState(seed, JSON.parse(raw) as Partial<AppState>);
-  } catch {
-    return seed;
-  }
+  const stored = readJson<Partial<AppState>>(key);
+  return mergeState(seed, stored);
+}
+
+/**
+ * 已登录时若游客槽残留的旧数据与该账号云端快照完全一致（老版本单键数据升级后
+ * 云端已有同样内容），自动清理游客槽，避免每次登录都弹出"待认领"。
+ */
+function maybeCleanGuestSlot(remote: unknown): void {
+  const guestRaw = readJson<Partial<AppState>>(stateKey());
+  if (!guestRaw) return;
+  const merged = mergeState(createSeedState(), guestRaw);
+  if (contentEquals(merged, remote)) removeKey(stateKey());
+}
+
+/**
+ * 追加一条状态变更到投递时间线：
+ * - 旧数据缺 statusHistory → 先用 createdAt 初始化一条当前状态记录，再追加新状态；
+ * - 与时间线末尾状态相同（重复设置/远端回显）→ 不重复记录；
+ * - 时间戳统一用 ISO（updatedAt 语义，供阶段耗时统计取整日差）。
+ */
+function recordStatusChange(application: Application, status: ApplicationStatus, at: string): Application {
+  const history =
+    application.statusHistory && application.statusHistory.length > 0
+      ? application.statusHistory
+      : [{ status: application.status, at: application.createdAt }];
+  const last = history[history.length - 1];
+  if (last.status === status) return application;
+  return { ...application, statusHistory: [...history, { status, at }] };
 }
 
 function reducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
-    case "add-application":
-      return { ...state, applications: [action.application, ...state.applications] };
-    case "update-application":
+    case "add-application": {
+      const next = action.application;
+      // 新投递初始化状态时间线（外部带入的历史保留，缺省时以创建时状态为第一条）
+      const seeded: Application = {
+        ...next,
+        statusHistory:
+          next.statusHistory && next.statusHistory.length > 0
+            ? next.statusHistory
+            : [{ status: next.status, at: next.createdAt }],
+      };
+      return { ...state, applications: [seeded, ...state.applications] };
+    }
+    case "update-application": {
+      const at = new Date().toISOString();
       return {
         ...state,
-        applications: state.applications.map((item) =>
-          item.id === action.id ? { ...item, ...action.patch, updatedAt: new Date().toISOString() } : item,
-        ),
+        applications: state.applications.map((item) => {
+          if (item.id !== action.id) return item;
+          const merged: Application = { ...item, ...action.patch, updatedAt: at };
+          // 状态确实变化（含 计划投递→已投递 等）→ 记入时间线；仅改其他字段不追加
+          return action.patch.status && action.patch.status !== item.status
+            ? recordStatusChange(merged, action.patch.status, at)
+            : merged;
+        }),
       };
+    }
     case "remove-application":
       return { ...state, applications: state.applications.filter((item) => item.id !== action.id) };
     case "add-interview":
@@ -262,13 +302,20 @@ export interface AppStoreValue extends AppState {
   user: SyncUser | null;
   /** 云同步状态 */
   syncStatus: SyncStatus;
-  /** 云端还没有该用户的数据文档（首次登录，等待上传本机数据） */
+  /** 云端还没有该账号的数据文档，且本机游客槽有数据等待用户决定是否并入（认领期间暂停自动上传） */
   cloudEmpty: boolean;
+  /**
+   * 登录时检测到"本机游客槽有未绑定账号的数据"（且该账号云端/本机缓存为空）。
+   * 非 null 时界面应提示用户：并入该账号，或保留为游客数据。绝不静默上传或展示到他人账号。
+   */
+  pendingLocalClaim: AppState | null;
+  /** 把游客槽数据并入当前账号（作为该账号数据上传云端，成功后清除游客槽） */
+  claimLocalData: () => Promise<void>;
+  /** 暂不并入：游客数据保留在游客槽，该账号以全新状态开始 */
+  skipLocalClaim: () => void;
   register: (email: string, password: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  /** 把本机当前数据上传到云端，开始跨设备同步 */
-  uploadLocalToCloud: () => Promise<void>;
   /** 游客预览模式：界面切换为演示数据（用于截图/展示，不写入本地与云端） */
   previewDemo: boolean;
   togglePreviewDemo: () => void;
@@ -277,7 +324,8 @@ export interface AppStoreValue extends AppState {
 const AppStoreContext = createContext<AppStoreValue | null>(null);
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
-  const [realState, dispatch] = useReducer(reducer, undefined, loadState);
+  // 初始状态：登录态尚未恢复（Firebase 异步），先读游客槽，待 auth 事件到达后再切到对应账号槽
+  const [realState, dispatch] = useReducer(reducer, undefined, () => loadStateFromKey(stateKey()));
   const [user, setUser] = useState<SyncUser | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>(firebaseEnabled ? "local" : "unsupported");
   const [cloudEmpty, setCloudEmpty] = useState(false);
@@ -288,23 +336,68 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const state = previewDemo ? demoState : realState;
   // 上一次"来自云端"的状态 JSON：云端快照与它一致时视为回显，不再覆盖本地，避免同步死循环
   const lastRemoteJson = useRef<string | null>(null);
+  // 当前登录用户镜像（供异步回调判断身份切换）
+  const userRef = useRef<SyncUser | null>(null);
+  // 登录瞬间计算的"待认领候选"（游客槽有非种子数据且该账号本机无缓存时）；云端快照确认无数据后才真正提示
+  const claimCandidateRef = useRef<AppState | null>(null);
+  const [pendingClaim, setPendingClaim] = useState<AppState | null>(null);
+  // 登录后是否仍在等待"首份云端快照判定"（防护：判定前不上传，避免用本机旧内容覆盖云端已有数据）
+  const [cloudPending, setCloudPending] = useState(false);
 
   // 登录状态监听（仅云端启用时生效）
+  // 身份切换（登出 / 登录 / 换账号）时切换本地存储槽，保证界面只显示"当前空间"的数据：
+  //  - 登出 → 切回游客槽（账号数据留在其账号槽与云端，绝不残留展示）；
+  //  - 登录/换账号 → 立即切到该账号自己的槽（缓存或全新种子），旧游客数据只可能以"待认领"方式出现。
   useEffect(() => {
     if (!firebaseEnabled) return;
     return subscribeAuth((next) => {
-      setUser(next);
+      const prev = userRef.current;
+      userRef.current = next;
+      if (prev?.uid && next?.uid && prev.uid === next.uid) {
+        setUser(next); // 同一账号的会话刷新
+        return;
+      }
+      if (!prev && !next) return;
       if (!next) {
+        // ── 登出 ──
+        setUser(null);
         setSyncStatus("local");
         setCloudEmpty(false);
+        setCloudPending(false);
+        setPendingClaim(null);
+        claimCandidateRef.current = null;
         lastRemoteJson.current = null;
+        dispatch({ type: "replace-state", state: loadStateFromKey(stateKey()) });
+        return;
+      }
+      // ── 登录 / 换账号 ──
+      setUser(next);
+      setSyncStatus("syncing");
+      setCloudEmpty(false);
+      setCloudPending(true); // 等首份云端快照判定后再允许上传
+      lastRemoteJson.current = null;
+      dispatch({ type: "replace-state", state: loadStateFromKey(stateKey(next.uid)) });
+      claimCandidateRef.current = null;
+      const hasAccountCache = window.localStorage.getItem(stateKey(next.uid)) !== null;
+      if (!hasAccountCache) {
+        const guestRaw = readJson<Partial<AppState>>(stateKey());
+        if (guestRaw) {
+          const merged = mergeState(createSeedState(), guestRaw);
+          if (!contentEquals(merged, createSeedState())) {
+            claimCandidateRef.current = merged;
+          }
+        }
       }
     });
   }, []);
 
   // 登录后订阅云端状态文档：以云端为真，本机状态随之替换
+  // 同一账号的会话刷新（auth 事件以新对象重发）不重建订阅，避免打断认领/同步状态
+  const subscribedUidRef = useRef<string | null>(null);
   useEffect(() => {
     if (!user || !db) return;
+    if (subscribedUidRef.current === user.uid) return;
+    subscribedUidRef.current = user.uid;
     setSyncStatus("syncing");
     setCloudEmpty(false);
     lastRemoteJson.current = null;
@@ -314,38 +407,57 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       (snapshot) => {
         if (snapshot.metadata.hasPendingWrites) return; // 自己刚写入的回显，等服务端确认
         if (!snapshot.exists()) {
-          setCloudEmpty(true); // 云端无数据：等待用户上传本机数据
-          setSyncStatus("synced");
+          // 云端无该账号数据：有候选 → 提示认领（暂停上传，等用户决定）；无候选 → 允许上传 effect 用当前本人数据初始化
+          const candidate = claimCandidateRef.current;
+          if (candidate) {
+            setCloudEmpty(true);
+            setPendingClaim(candidate);
+            setSyncStatus("synced");
+          } else {
+            setCloudEmpty(false);
+            setSyncStatus("synced");
+          }
+          setCloudPending(false);
           return;
         }
         const remote = (snapshot.data() as { data?: unknown }).data;
         const json = JSON.stringify(remote ?? null);
-        if (json === lastRemoteJson.current) return; // 与已应用内容一致（含自己上传后的确认回显）
+        if (json === lastRemoteJson.current) {
+          setSyncStatus("synced"); // 与已应用内容一致（含自己上传后的确认回显）
+          setCloudPending(false);
+          return;
+        }
         lastRemoteJson.current = json;
         if (isAppState(remote)) {
           dispatch({ type: "replace-state", state: remote });
+          maybeCleanGuestSlot(remote); // 云端已有且与游客槽一致 → 清理旧单键残留
         }
+        setPendingClaim(null);
+        setCloudEmpty(false);
+        setCloudPending(false);
         setSyncStatus("synced");
       },
       () => setSyncStatus("error"),
     );
-    return unsubscribe;
+    return () => {
+      subscribedUidRef.current = null;
+      unsubscribe();
+    };
   }, [user]);
 
-  // 真实持久化：任何状态变化立即写入本地存储（本地备份层，始终保留）
+  // 真实持久化：任何状态变化立即写入"当前空间"的本地槽
+  // （未登录→游客槽；已登录→该账号槽，作为本机缓存备份）
   // ⚠️ 游客预览模式不写：演示数据绝不污染本人真实数据
   useEffect(() => {
     if (previewDemo) return;
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(realState));
-    } catch {
-      // 存储失败不阻断使用（例如隐私模式）
-    }
-  }, [realState, previewDemo]);
+    writeJson(user ? stateKey(user.uid) : stateKey(), realState);
+  }, [realState, previewDemo, user]);
 
-  // 云端同步：登录后防抖上传；状态来自云端（回显一致）时不写回；游客预览模式不上传
+  // 云端同步：登录后防抖上传；状态来自云端（回显一致）时不写回；游客预览模式不上传；
+  // 认领待定（cloudEmpty）或首份云端快照未判定（cloudPending）期间不上传，
+  // 避免把游客/他人/本机旧内容静默写入该账号
   useEffect(() => {
-    if (previewDemo || !user || !db || cloudEmpty) return;
+    if (previewDemo || !user || !db || cloudEmpty || cloudPending) return;
     if (lastRemoteJson.current !== null && JSON.stringify(realState) === lastRemoteJson.current) return;
     setSyncStatus("syncing");
     const docRef = doc(db, "states", user.uid);
@@ -355,13 +467,36 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         .catch(() => setSyncStatus("error"));
     }, 600);
     return () => clearTimeout(timer);
-  }, [realState, user, cloudEmpty, previewDemo]);
+  }, [realState, user, cloudEmpty, cloudPending, previewDemo]);
 
-  const uploadLocalToCloud = async () => {
-    if (!user || !db) return;
+  /** 认领：把游客槽数据并入当前账号（作为该账号数据上传云端，成功后清除游客槽） */
+  const claimLocalData = async () => {
+    const uid = userRef.current?.uid;
+    if (!uid || !db || !pendingClaim) return;
+    const claim = pendingClaim;
     setCloudEmpty(false);
     setSyncStatus("syncing");
-    await setDoc(doc(db, "states", user.uid), { data: realState, updatedAt: serverTimestamp() }, { merge: true });
+    setPendingClaim(null);
+    claimCandidateRef.current = null;
+    lastRemoteJson.current = null;
+    dispatch({ type: "replace-state", state: claim });
+    try {
+      await setDoc(doc(db, "states", uid), { data: claim, updatedAt: serverTimestamp() }, { merge: true });
+      removeKey(stateKey()); // 已并入账号：清除游客槽，避免下次登录重复询问
+      setSyncStatus("synced");
+    } catch {
+      setSyncStatus("error");
+      setCloudEmpty(true);
+      setPendingClaim(claim); // 失败可重试
+    }
+  };
+
+  /** 暂不认领：游客数据保留在游客槽，该账号以当前（全新/缓存）状态开始，由上传 effect 初始化云端 */
+  const skipLocalClaim = () => {
+    if (!userRef.current || !db) return;
+    setPendingClaim(null);
+    claimCandidateRef.current = null;
+    setCloudEmpty(false);
     setSyncStatus("synced");
   };
 
@@ -410,13 +545,15 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     user,
     syncStatus,
     cloudEmpty,
+    pendingLocalClaim: pendingClaim,
+    claimLocalData,
+    skipLocalClaim,
     previewDemo,
     togglePreviewDemo: () => setPreviewDemo((v) => !v),
     register: (email, password) => registerUser(email, password).then(() => undefined),
     login: (email, password) => loginUser(email, password).then(() => undefined),
     logout: () => logoutUser(),
-    uploadLocalToCloud,
-  }), [state, user, syncStatus, cloudEmpty, previewDemo]);
+  }), [state, user, syncStatus, cloudEmpty, cloudPending, previewDemo, pendingClaim]);
 
   return <AppStoreContext.Provider value={value}>{children}</AppStoreContext.Provider>;
 }

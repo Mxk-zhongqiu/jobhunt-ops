@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "求职作战台 · 投递同步助手",
+  "version": "0.1.0",
+  "description": "在你浏览 Boss直聘 / 猎聘 投递与沟通时，半自动提取岗位信息，把投递与状态变化同步到你的求职作战台（只读写你自己的账号数据；AI 生成一律为草稿，需你确认后才写入）。",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "https://*.zhipin.com/*",
+    "https://*.liepin.com/*",
+    "https://firestore.googleapis.com/*",
+    "https://identitytoolkit.googleapis.com/*",
+    "https://securetoken.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "求职作战台 · 投递同步助手",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.zhipin.com/*", "https://*.liepin.com/*"],
+      "js": ["content/extract.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

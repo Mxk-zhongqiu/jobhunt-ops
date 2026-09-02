@@ -17,6 +17,7 @@
     "state:validate": "node scripts/data/state-tools.mjs validate",
     "state:apply": "node scripts/data/state-tools.mjs apply",
     "state:plan": "node scripts/data/state-tools.mjs plan",
+    "ext:config": "node scripts/gen-extension-config.mjs",
     "verify": "node scripts/verify-ai.mjs"
   },
   "dependencies": {

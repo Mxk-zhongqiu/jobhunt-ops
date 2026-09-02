@@ -9,6 +9,8 @@ import { OverviewPage } from "../pages/OverviewPage";
 import { PlanPage } from "../pages/PlanPage";
 import { ProjectsPage } from "../pages/ProjectsPage";
 import { QuestionBankPage } from "../pages/QuestionBankPage";
+import { ResumePage } from "../pages/ResumePage";
+import { StatsPage } from "../pages/StatsPage";
 
 export const router = createBrowserRouter([
   {
@@ -17,6 +19,8 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <OverviewPage /> },
       { path: "applications", element: <ApplicationsPage /> },
+      { path: "stats", element: <StatsPage /> },
+      { path: "resume", element: <ResumePage /> },
       { path: "plan", element: <PlanPage /> },
       { path: "projects", element: <ProjectsPage /> },
       { path: "knowledge", element: <KnowledgePage /> },

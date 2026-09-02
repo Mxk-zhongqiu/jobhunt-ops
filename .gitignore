@@ -12,3 +12,4 @@ dist
 firebase-debug.log
 .firebaserc
 .edge-profile
+extension/config.js
