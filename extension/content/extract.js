@@ -144,10 +144,150 @@
     return result;
   }
 
+  // ─── DOM 能力探测（P1 spike：确认 BOSS/猎聘 页面上哪些数据可读、输入框可否注入）───
+  // 只读探测：统计关键候选选择器/消息类容器/输入框是否存在于真实页面 DOM；
+  // 注入测试（writeTest=true，仅建议在会话页跑）：向输入框写入探针文本→回读→立即清空，
+  // 不按回车、不点发送，验证"自动化输入"是否可行。
+  const PROBE_CHAT_SELECTORS = [
+    '[class*="message"]',
+    '[class*="chat"]',
+    '[class*="bubble"]',
+    '[class*="msg"]',
+    '[class*="conversation"]',
+  ];
+  const PROBE_INPUT_SELECTORS = ["textarea", 'input[type="text"]', '[contenteditable="true"]', '[contenteditable=""]'];
+
+  function visibleText(el) {
+    if (!el) return "";
+    return (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+  }
+
+  function testFillTarget(target, probeText) {
+    const tag = target.tagName;
+    const kind = tag === "TEXTAREA" || tag === "INPUT" ? "field" : target.isContentEditable ? "contenteditable" : "other";
+    let setOk = false;
+    let readBack = "";
+    if (kind === "field") {
+      const proto = tag === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
+      setter.call(target, probeText);
+      target.dispatchEvent(new Event("input", { bubbles: true }));
+      readBack = target.value;
+      setOk = readBack === probeText;
+    } else if (kind === "contenteditable") {
+      target.textContent = probeText;
+      target.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: probeText }));
+      readBack = (target.innerText || target.textContent || "").trim();
+      setOk = readBack === probeText;
+    }
+    return { tag, kind, setOk, readBack: readBack.slice(0, 30) };
+  }
+
+  function clearTarget(target) {
+    try {
+      if (target.tagName === "TEXTAREA" || target.tagName === "INPUT") {
+        const proto = target.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
+        setter.call(target, "");
+        target.dispatchEvent(new Event("input", { bubbles: true }));
+      } else if (target.isContentEditable) {
+        target.textContent = "";
+        target.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
+      }
+    } catch (_) {
+      /* 忽略清空失败 */
+    }
+  }
+
+  function runDomProbe(writeTest) {
+    const count = (selector) => {
+      try {
+        return document.querySelectorAll(selector).length;
+      } catch (_) {
+        return -1;
+      }
+    };
+    const inputs = PROBE_INPUT_SELECTORS.map((selector) => ({ selector, count: count(selector) }));
+    const chatLike = [];
+    for (const selector of PROBE_CHAT_SELECTORS) {
+      try {
+        const nodes = document.querySelectorAll(selector);
+        let last = "";
+        for (const node of nodes) {
+          const text = visibleText(node);
+          if (text.length >= 2) last = text;
+        }
+        if (nodes.length > 0) chatLike.push({ selector, count: nodes.length, lastSnippet: last.slice(-80) });
+      } catch (_) {
+        chatLike.push({ selector, count: -1 });
+      }
+    }
+    const app = document.querySelector("#app");
+    const bodyText = document.body ? document.body.innerText || "" : "";
+    const marker = /安全验证|访问频繁|验证码|滑动验证|请完成验证|人机验证|触发风控/i.test(bodyText);
+
+    let writeTestResult = { skipped: !writeTest };
+    if (writeTest) {
+      // 找一个可见输入框（会话输入区通常在本页唯一的 textarea / contenteditable）
+      let target = null;
+      for (const selector of PROBE_INPUT_SELECTORS) {
+        try {
+          const el = document.querySelector(selector);
+          if (el && (el.tagName === "TEXTAREA" || el.isContentEditable)) {
+            target = el;
+            break;
+          }
+        } catch (_) {
+          /* 忽略 */
+        }
+      }
+      if (target) {
+        const probeText = `__jh_probe_${Date.now()}__`;
+        writeTestResult = { skipped: false, ...testFillTarget(target, probeText), clearedAfter: true };
+        clearTarget(target);
+      } else {
+        writeTestResult = { skipped: false, error: "未找到可注入的输入框（textarea/contenteditable）" };
+      }
+    }
+
+    return {
+      url: location.href,
+      platform: platformByHost(),
+      title: clean(document.title),
+      page: {
+        bodyTextLen: bodyText.length,
+        bodyBlank: bodyText.trim().length === 0,
+        appChildren: app ? app.children.length : -1,
+        appTextSample: app ? clean(app.innerText).slice(0, 80) : "",
+        iframes: [...document.querySelectorAll("iframe")].map((f) => f.src).slice(0, 3),
+        openShadowOnApp: Boolean(app && app.shadowRoot),
+        ldJsonCount: count('script[type="application/ld+json"]'),
+        marker,
+      },
+      extraction: {
+        company: extractPage().company || "",
+        position: extractPage().position || "",
+        jdLength: extractPage().jd.length,
+      },
+      chatLike,
+      inputs,
+      writeTest: writeTestResult,
+    };
+  }
+
+  window.__jobhuntRunDomProbe__ = runDomProbe;
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message && message.type === "jobhunt-extract") {
       try {
         sendResponse({ ok: true, data: extractPage() });
+      } catch (err) {
+        sendResponse({ ok: false, error: String(err && err.message ? err.message : err) });
+      }
+    }
+    if (message && message.type === "jobhunt-dom-probe") {
+      try {
+        sendResponse({ ok: true, data: runDomProbe(Boolean(message.writeTest)) });
       } catch (err) {
         sendResponse({ ok: false, error: String(err && err.message ? err.message : err) });
       }

@@ -97,6 +97,19 @@
       </div>
     </section>
 
+    <!-- DOM 能力探测（P1 spike：确认 BOSS/猎聘 页面可读与可注入范围） -->
+    <section class="card">
+      <div class="card-title">
+        <h2>③ DOM 能力探测</h2>
+        <button type="button" class="btn ghost small" id="probeRunBtn">运行并复制</button>
+      </div>
+      <div class="stack">
+        <p class="hint">当前标签页运行（需 BOSS直聘/猎聘 页面）。先只读跑一次；会话页可勾选注入测试（写入探针后立即清空，不会发送）。结果自动复制，直接粘贴回对话即可。</p>
+        <label class="check-line"><input type="checkbox" id="probeWriteCb" /> 包含输入框注入测试（会话页用，写完即清空）</label>
+        <textarea id="probeOut" class="probe-out" rows="7" readonly placeholder="探测结果将显示在这里"></textarea>
+      </div>
+    </section>
+
     <p id="result" class="result" hidden></p>
     <p class="footnote">数据写入的是你在 https://obs.jobhunt.top 的账号云端；网页端打开时会自动同步显示。</p>
   </main>

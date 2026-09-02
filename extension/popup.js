@@ -37,6 +37,9 @@ const elements = {
   candidateSel: $("candidateSel"),
   nextStatusSel: $("nextStatusSel"),
   applyStatusBtn: $("applyStatusBtn"),
+  probeRunBtn: $("probeRunBtn"),
+  probeWriteCb: $("probeWriteCb"),
+  probeOut: $("probeOut"),
   result: $("result"),
 };
 
@@ -297,6 +300,35 @@ async function handleApplyStatus() {
   }
 }
 
+// ─── DOM 能力探测（P1 spike）───
+
+async function runDomProbe() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  elements.probeOut.value = "";
+  if (!tab || !tab.id) {
+    showResult("err", "找不到当前标签页");
+    return;
+  }
+  const writeTest = elements.probeWriteCb.checked;
+  try {
+    const res = await chrome.tabs.sendMessage(tab.id, { type: "jobhunt-dom-probe", writeTest });
+    if (!res || !res.ok) {
+      throw new Error(res && res.error ? res.error : "无响应（请确认当前是 BOSS直聘/猎聘 页面，且扩展已重新加载）");
+    }
+    const json = JSON.stringify(res.data, null, 2);
+    elements.probeOut.value = json;
+    try {
+      await navigator.clipboard.writeText(json);
+      showResult("ok", "探测完成：结果已复制到剪贴板，直接粘贴回对话即可");
+    } catch (_) {
+      showResult("ok", "探测完成：未能自动复制，请手动全选下方文本后复制");
+    }
+  } catch (err) {
+    elements.probeOut.value = "";
+    showResult("err", "探测失败：" + (err && err.message ? err.message : err));
+  }
+}
+
 // ─── 事件绑定与初始化 ───
 
 function init() {
@@ -311,6 +343,7 @@ function init() {
   elements.addForm.addEventListener("submit", handleAdd);
   elements.refreshListBtn.addEventListener("click", () => loadCandidates(""));
   elements.applyStatusBtn.addEventListener("click", handleApplyStatus);
+  elements.probeRunBtn.addEventListener("click", runDomProbe);
   elements.fJd.addEventListener("input", () => {
     elements.jdChars.textContent = String(elements.fJd.value.length);
   });
