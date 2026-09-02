@@ -9,6 +9,7 @@
 //   - 所有写入均由用户在 popup 确认后发起，本文件不做任何"自动"写入。
 
 importScripts("config.js");
+importScripts("lib/parsers.js");
 
 const CFG = globalThis.EXT_CONFIG || {};
 const FS_BASE = `https://firestore.googleapis.com/v1/projects/${CFG.projectId}/databases/(default)/documents`;
@@ -168,9 +169,9 @@ function decodeField(field) {
   return null;
 }
 
-async function docRequest(pathSuffix, init) {
+async function docRequest(collection, pathSuffix, init) {
   const session = await ensureToken();
-  const url = `${FS_BASE}/documents/${encodeURIComponent(session.uid)}${pathSuffix}`;
+  const url = `${FS_BASE}/${collection}/${encodeURIComponent(session.uid)}${pathSuffix}`;
   const headers = { Authorization: `Bearer ${session.idToken}`, ...(init && init.headers) };
   const res = await fetch(url, { ...init, headers });
   const text = await res.text();
@@ -193,7 +194,7 @@ async function docRequest(pathSuffix, init) {
 
 /** 读取本人 states/{uid} 的 data 字段；云端还没有文档时返回 null */
 async function readState() {
-  const json = await docRequest("?mask.fieldPaths=data&mask.fieldPaths=updatedAt");
+  const json = await docRequest("states", "?mask.fieldPaths=data&mask.fieldPaths=updatedAt");
   if (!json || !json.fields || !json.fields.data) return null;
   return decodeField(json.fields.data);
 }
@@ -201,7 +202,7 @@ async function readState() {
 /** 整份写回本人 states/{uid}.data（与网页端同一文档模型：{ data, updatedAt }） */
 async function writeState(appState) {
   const patch = "?updateMask.fieldPaths=data&updateMask.fieldPaths=updatedAt";
-  await docRequest(patch, {
+  await docRequest("states", patch, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -227,6 +228,160 @@ function emptyState() {
       totalTarget: 100,
       aiProvider: "mock",
     },
+  };
+}
+
+// ─── P1 · AI 写手：简历读取 / 版本推荐 / 摘要投影 / aiGenerate ───
+
+const JH = globalThis.JH || {};
+const cutS = (value, max) => (JH.cut ? JH.cut(value, max) : String(value || "").slice(0, max));
+
+function codeError(code, message) {
+  const err = new Error(message);
+  err.code = code;
+  return err;
+}
+
+function aiErrorMessage(code) {
+  const map = {
+    AUTH_REQUIRED: "请先在插件里登录作战台账号",
+    RESUME_EMPTY: "云端还没有简历：请先在 obs.jobhunt.top 登录并保存简历",
+    AI_NOT_CONFIGURED: "AI 代理未配置/未部署：请确认 Worker 已部署且已运行 npm run ext:config",
+    AI_NOT_CONFIGURED_CLOUD: "AI 代理未配置（Worker 未部署或未配置密钥）",
+    INSUFFICIENT_BALANCE: "DeepSeek 余额不足，请充值后再试",
+    RATE_LIMITED: "请求过于频繁，请稍后重试",
+    TIMEOUT: "AI 响应超时，请重试",
+    OUTPUT_TRUNCATED: "AI 输出被截断，请重试",
+    INVALID_PROVIDER_RESPONSE: "AI 返回格式异常，请重试",
+    DEEPSEEK_REQUEST_FAILED: "网络请求失败，请检查网络与 AI 代理地址",
+  };
+  return map[code] || `生成失败（${code || "未知错误"}），请确认 Worker 已部署新版本后重试`;
+}
+
+/** 读取本人 resumes/{uid}.data（{ materials, versions }）；空态返回 empty */
+async function readResumeState() {
+  const json = await docRequest("resumes", "?mask.fieldPaths=data&mask.fieldPaths=updatedAt");
+  if (!json || !json.fields || !json.fields.data) return { empty: true, resumeState: null };
+  const resumeState = decodeField(json.fields.data);
+  const empty = !resumeState || !Array.isArray(resumeState.versions) || resumeState.versions.length === 0;
+  return { empty, resumeState };
+}
+
+function summarizeVersions(resumeState) {
+  const versions = (resumeState && Array.isArray(resumeState.versions) ? resumeState.versions : []).map((v) => ({
+    id: v.id,
+    name: v.name || "",
+    targetRole: v.targetRole || "",
+    jobIntentPositions: (v.jobIntent && v.jobIntent.positions) || "",
+  }));
+  return versions;
+}
+
+/** 版本内素材应用 override 后的解析列表（供 JH.buildVersionDigest 使用） */
+function resolveMaterialsForVersion(resumeState, version) {
+  const byId = new Map((resumeState.materials || []).map((m) => [m.id, m]));
+  return (version.blocks || [])
+    .map((block) => {
+      const m = byId.get(block.materialId);
+      if (!m) return null;
+      const override = block.override || {};
+      return {
+        id: m.id,
+        category: m.category,
+        title: override.title ?? m.title,
+        subtitle: override.subtitle ?? m.subtitle,
+        content: override.content ?? m.content,
+      };
+    })
+    .filter(Boolean);
+}
+
+function parseDraftPayload(content, mode) {
+  let value;
+  try {
+    value = JSON.parse(content);
+  } catch (_) {
+    throw codeError("INVALID_PROVIDER_RESPONSE", "AI 返回格式异常");
+  }
+  if (!value || value.kind !== mode || !Array.isArray(value.drafts)) throw codeError("INVALID_PROVIDER_RESPONSE", "AI 返回格式异常");
+  const drafts = value.drafts
+    .filter((item) => typeof item === "string" && item.trim().length > 0)
+    .slice(0, 3)
+    .map((item) => item.trim());
+  if (drafts.length === 0) throw codeError("INVALID_PROVIDER_RESPONSE", "AI 未返回有效话术");
+  return { drafts, notes: typeof value.notes === "string" ? value.notes : "" };
+}
+
+async function callCloudAi(session, body) {
+  if (!CFG.aiProxyUrl) throw codeError("AI_NOT_CONFIGURED", aiErrorMessage("AI_NOT_CONFIGURED"));
+  let response;
+  try {
+    response = await fetch(`${CFG.aiProxyUrl}/deepseek`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.idToken}` },
+      body: JSON.stringify(body),
+    });
+  } catch (_) {
+    throw codeError("DEEPSEEK_REQUEST_FAILED", aiErrorMessage("DEEPSEEK_REQUEST_FAILED"));
+  }
+  const text = await response.text();
+  let json = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch (_) {
+    json = null;
+  }
+  if (!response.ok) {
+    const code = (json && json.code) || "DEEPSEEK_REQUEST_FAILED";
+    throw codeError(code, aiErrorMessage(code));
+  }
+  const content = json && json.content;
+  if (!content) throw codeError("EMPTY_RESPONSE", aiErrorMessage("EMPTY_RESPONSE"));
+  const parsed = parseDraftPayload(content, body.request.capability);
+  return { drafts: parsed.drafts, notes: parsed.notes, model: json.model || "" };
+}
+
+async function aiGenerate(payload) {
+  const mode = payload.mode === "reply" ? "reply" : "greeting";
+  const session = await ensureToken();
+  const { empty, resumeState } = await readResumeState();
+  if (empty || !resumeState) throw codeError("RESUME_EMPTY", aiErrorMessage("RESUME_EMPTY"));
+
+  const versions = summarizeVersions(resumeState);
+  const picked =
+    versions.find((v) => v.id === payload.versionId) ||
+    (payload.versionId ? null : versions[0]) ||
+    versions[0];
+  if (!picked) throw codeError("RESUME_EMPTY", aiErrorMessage("RESUME_EMPTY"));
+  const versionObj = (resumeState.versions || []).find((v) => v.id === picked.id);
+  const materials = resolveMaterialsForVersion(resumeState, versionObj);
+  const resumeDigest = JH.buildVersionDigest ? JH.buildVersionDigest(versionObj, materials) : "";
+
+  const jd = {
+    position: cutS(payload.jd && payload.jd.position, 80),
+    company: cutS(payload.jd && payload.jd.company, 40),
+    jdText: cutS(payload.jd && payload.jd.jdText, 1500),
+  };
+  const hrMessage = cutS(payload.hrMessage, 800);
+  const tone = payload.tone || "quant";
+
+  const userInstruction =
+    mode === "greeting"
+      ? `${jd.jdText ? `目标 JD：${jd.jdText}` : `目标岗位：${jd.position}${jd.company ? `（${jd.company}）` : ""}`}。结合上面的简历摘要，生成 3 版向招聘方打招呼的开场语。`
+      : `${hrMessage ? `HR 最新消息：${hrMessage}` : "（未提供 HR 消息文本）"}。结合简历摘要，生成 3 版得体回复（可先判断 HR 意图，再给出下一步）。`;
+
+  const body = {
+    request: { capability: mode, userInstruction },
+    authorizedContext: { mode, jd, hrMessage, resumeDigest, tone },
+  };
+  const result = await callCloudAi(session, body);
+  return {
+    mode,
+    versionId: picked.id,
+    versionName: picked.name,
+    drafts: result.drafts,
+    notes: result.notes,
+    model: result.model,
   };
 }
 
@@ -368,6 +523,18 @@ const handlers = {
   upsertApplication: (payload) => upsertApplication(payload || {}),
   setStatus: (payload) => setStatus(payload || {}),
   listCandidates: (payload) => listCandidates(payload || {}),
+  listResumeVersions: async () => {
+    const { empty, resumeState } = await readResumeState();
+    return { empty, versions: summarizeVersions(resumeState) };
+  },
+  suggestResumeVersion: async (payload) => {
+    const { empty, resumeState } = await readResumeState();
+    const versions = summarizeVersions(resumeState);
+    const hint = (payload && payload.hint) || "";
+    const suggestion = JH.suggestVersion ? JH.suggestVersion(hint, versions) : { versionId: undefined, reason: "" };
+    return { empty, versions, versionId: suggestion.versionId, reason: suggestion.reason };
+  },
+  aiGenerate: (payload) => aiGenerate(payload || {}),
 };
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
