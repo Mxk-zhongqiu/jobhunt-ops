@@ -21,7 +21,7 @@
   "content_scripts": [
     {
       "matches": ["https://*.zhipin.com/*", "https://*.liepin.com/*"],
-      "js": ["content/extract.js"],
+      "js": ["lib/parsers.js", "content/extract.js"],
       "run_at": "document_idle"
     }
   ]

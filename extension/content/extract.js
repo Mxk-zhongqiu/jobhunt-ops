@@ -9,6 +9,9 @@
 
   const clean = (text) => (text || "").replace(/\s+/g, " ").trim();
 
+  // JD/详情类容器关键字（采集与探测共用）
+  const JD_KEYWORDS = ["job-sec", "job-detail", "job-desc", "jobDesc", "job-intro", "description-text", "desc", "detail", "introduce"];
+
   function platformByHost() {
     const host = location.hostname;
     if (host.includes("zhipin")) return "Boss直聘";
@@ -118,16 +121,84 @@
     return { position, company };
   }
 
+  // 会话页：尽力抓取最后一条"对方消息"文本（过滤工具条/时间；抓不到由用户手动粘贴）
+  function captureChatMessage() {
+    const root = document.querySelector('[class*="conversation"]') || document.body;
+    let last = "";
+    try {
+      const nodes = root.querySelectorAll('[class*="message"],[class*="msg"],[class*="bubble"],[class*="chat-msg"]');
+      for (const node of nodes) {
+        const text = clean(node.innerText || node.textContent || "");
+        if (text.length < 6 || text.length > 800) continue;
+        if (globalThis.JH && globalThis.JH.isToolbarText(text)) continue;
+        if (/^\d{1,2}:\d{2}$/.test(text)) continue;
+        last = text;
+      }
+    } catch (_) {
+      /* 忽略 */
+    }
+    return last;
+  }
+
+  // job_detail 页：岗位/公司（公司以标题为准，防 DOM 脱敏「某基金公司」）+ JD 全文采集
+  function captureJobDetail() {
+    const JH = globalThis.JH || {};
+    const parsed = JH.parseTitleJob ? JH.parseTitleJob(document.title) : { position: "", company: "" };
+    const dom = fromDom();
+    const domCompany = dom.company && (!JH.isMaskedCompany || !JH.isMaskedCompany(dom.company)) ? dom.company : "";
+    const jdText = longestKeywordText(JD_KEYWORDS).text;
+    const position = clean(parsed.position || dom.position);
+    const company = clean(parsed.company || domCompany);
+    const cutText = (value, max) => (JH.cut ? JH.cut(value, max) : String(value || "").slice(0, max));
+    return {
+      position: cutText(position, 80),
+      company: cutText(company, 40),
+      companyFromTitle: cutText(parsed.company || "", 40),
+      jdText: cutText(jdText, 1500),
+    };
+  }
+
   function extractPage() {
+    const JH = globalThis.JH || {};
+    const pageType = JH.classifyPage
+      ? JH.classifyPage(location.href, document.title)
+      : location.href.includes("job_detail")
+        ? "job_detail"
+        : location.href.includes("chat")
+          ? "chat"
+          : "other";
     const result = {
       url: location.href,
       platform: platformByHost(),
+      pageType,
       position: "",
       company: "",
       jd: "",
       from: "none",
+      capture: { position: "", company: "", companyFromTitle: "", jdText: "" },
+      message: { text: "", source: "none" },
     };
+    if (pageType === "job_detail") {
+      result.capture = captureJobDetail();
+      result.position = result.capture.position;
+      result.company = result.capture.company;
+      result.jd = result.capture.jdText.slice(0, 500);
+      result.from = result.capture.position || result.capture.jdText ? "typed" : "none";
+      return result;
+    }
+    if (pageType === "chat") {
+      const dom = fromDom();
+      const parsed = JH.parseTitleJob ? JH.parseTitleJob(document.title) : fromTitle();
+      const msg = captureChatMessage();
+      result.message = { text: msg ? (JH.cut ? JH.cut(msg, 800) : msg.slice(0, 800)) : "", source: msg ? "auto" : "none" };
+      result.position = JH.cut ? JH.cut(clean(parsed.position || dom.position), 80) : clean(parsed.position || dom.position).slice(0, 80);
+      result.from = parsed.position ? "title" : "none";
+      return result;
+    }
+    // other：保留原兜底（JSON-LD / DOM / 标题）
     const ld = fromJsonLd();
+    const dom = fromDom();
+    const parsed = JH.parseTitleJob ? JH.parseTitleJob(document.title) : fromTitle();
     if (ld && (ld.position || ld.company || ld.jd)) {
       result.position = clean(ld.position);
       result.company = clean(ld.company);
@@ -135,10 +206,9 @@
       result.from = "jsonld";
       return result;
     }
-    const dom = fromDom();
-    const titleGuess = fromTitle();
-    result.position = clean(dom.position || titleGuess.position);
-    result.company = clean(dom.company || titleGuess.company);
+    const domCompany = dom.company && (!JH.isMaskedCompany || !JH.isMaskedCompany(dom.company)) ? dom.company : "";
+    result.position = clean(dom.position || parsed.position);
+    result.company = clean(parsed.company || domCompany);
     result.jd = clean(dom.jd).slice(0, 500);
     result.from = result.company || result.position ? "dom" : "none";
     return result;
@@ -199,16 +269,16 @@
     }
   }
 
-  // 正文可见性：在疑似 JD/详情/描述的容器里找文本最长者（判断岗位 JD 正文是否真实渲染在 DOM）
+  // 正文可见性/采集：在疑似 JD/详情/描述的容器里找文本最长者（返回全文，采集与探测共用）
   function longestKeywordText(keywords) {
-    let best = { len: 0, sample: "" };
+    let best = { len: 0, text: "" };
     const all = document.querySelectorAll("div,section,article");
     for (const el of all) {
       const raw = el.className;
       const cls = typeof raw === "string" ? raw : raw && raw.baseVal !== undefined ? raw.baseVal : "";
       if (!keywords.some((keyword) => cls.includes(keyword))) continue;
       const text = visibleText(el);
-      if (text.length > best.len) best = { len: text.length, sample: text.slice(0, 160) };
+      if (text.length > best.len) best = { len: text.length, text };
     }
     return best;
   }
@@ -278,17 +348,10 @@
         ldJsonCount: count('script[type="application/ld+json"]'),
         marker,
       },
-      jdAreaText: longestKeywordText([
-        "job-sec",
-        "job-detail",
-        "job-desc",
-        "jobDesc",
-        "job-intro",
-        "description-text",
-        "desc",
-        "detail",
-        "introduce",
-      ]),
+      jdAreaText: (() => {
+        const area = longestKeywordText(JD_KEYWORDS);
+        return { len: area.len, sample: area.text.slice(0, 160) };
+      })(),
       extraction: {
         company: extractPage().company || "",
         position: extractPage().position || "",
@@ -298,6 +361,43 @@
       inputs,
       writeTest: writeTestResult,
     };
+  }
+
+  // 写入直聊输入框（只填不发送；contenteditable 用 execCommand 触发 React，textarea 走原生 setter）
+  function fillChatInput(text) {
+    if (!text) return { filled: false, reason: "空文本" };
+    let target = null;
+    for (const selector of ['[contenteditable="true"]', "textarea"]) {
+      try {
+        const el = document.querySelector(selector);
+        if (el && (el.isContentEditable || el.tagName === "TEXTAREA")) {
+          target = el;
+          break;
+        }
+      } catch (_) {
+        /* 忽略 */
+      }
+    }
+    if (!target) return { filled: false, reason: "未找到可用的输入框（textarea/contenteditable）" };
+    try {
+      target.focus();
+      if (target.isContentEditable) {
+        const range = document.createRange();
+        range.selectNodeContents(target);
+        range.deleteContents();
+        const inserted = document.execCommand("insertText", false, text);
+        const readBack = clean(target.innerText || target.textContent || "");
+        const ok = Boolean(readBack.includes(text) && inserted !== false);
+        return { filled: ok, tag: "DIV", reason: ok ? "" : "写入后未读到文本，请改用「复制」后手动粘贴" };
+      }
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
+      setter.call(target, text);
+      target.dispatchEvent(new Event("input", { bubbles: true }));
+      const ok = Boolean((target.value || "").includes(text));
+      return { filled: ok, tag: "TEXTAREA", reason: ok ? "" : "写入后未读到文本，请改用「复制」" };
+    } catch (err) {
+      return { filled: false, reason: String(err && err.message ? err.message : err) };
+    }
   }
 
   window.__jobhuntRunDomProbe__ = runDomProbe;
@@ -313,6 +413,13 @@
     if (message && message.type === "jobhunt-dom-probe") {
       try {
         sendResponse({ ok: true, data: runDomProbe(Boolean(message.writeTest)) });
+      } catch (err) {
+        sendResponse({ ok: false, error: String(err && err.message ? err.message : err) });
+      }
+    }
+    if (message && message.type === "jobhunt-fill") {
+      try {
+        sendResponse({ ok: true, ...fillChatInput(String(message.text || "")) });
       } catch (err) {
         sendResponse({ ok: false, error: String(err && err.message ? err.message : err) });
       }
