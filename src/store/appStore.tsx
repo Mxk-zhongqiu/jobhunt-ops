@@ -9,6 +9,7 @@ import type {
   AppSettings,
   AppState,
   Application,
+  ApplicationPlatform,
   ApplicationStatus,
   InterviewLog,
   KnowledgePoint,
@@ -69,10 +70,41 @@ function normalizeKnowledge(knowledge: KnowledgeTopic[]): KnowledgeTopic[] {
   });
 }
 
+/**
+ * 旧「渠道」字段 → 「来源平台」一次迁移：
+ * - 历史数据（本地/云端）里带 channel 且无 platform 的记录，按映射补齐 platform；
+ * - 同时剔除冗余的 channel 键，避免双维度长期并存；
+ * - 迁移无变化时返回原数组引用（不触发多余重渲染/上传）。
+ */
+const LEGACY_CHANNEL_TO_PLATFORM: Record<string, ApplicationPlatform> = {
+  官网: "官网",
+  牛客: "牛客",
+  应届生: "应届生",
+  学校就业网: "学校就业网",
+  内推: "内推",
+  实习转正: "实习转正",
+  其他: "其他平台",
+};
+
+type LegacyApplication = Application & { channel?: string };
+
+function migrateApplications(applications: LegacyApplication[]): Application[] {
+  let changed = false;
+  const migrated = applications.map((item) => {
+    const legacy = item.channel && !item.platform ? LEGACY_CHANNEL_TO_PLATFORM[item.channel] : undefined;
+    const platform = item.platform ?? legacy;
+    if (!item.channel && platform === item.platform) return item;
+    changed = true;
+    const { channel: _removed, ...rest } = item;
+    return platform ? { ...rest, platform } : rest;
+  });
+  return changed ? migrated : applications;
+}
+
 function mergeState(seed: AppState, stored: Partial<AppState> | null): AppState {
   if (!stored) return seed;
   return {
-    applications: stored.applications ?? seed.applications,
+    applications: stored.applications ? migrateApplications(stored.applications) : seed.applications,
     interviews: stored.interviews ?? seed.interviews,
     weeklyPlans: stored.weeklyPlans ?? seed.weeklyPlans,
     projects: stored.projects ?? seed.projects,
@@ -260,9 +292,10 @@ function reducer(state: AppState, action: AppAction): AppState {
           : [...state.questionBankMastered, action.key],
       };
     case "replace-state":
-      // 兼容旧备份：导入/重置的数据若缺新字段则兜底为空数组；知识主题统一走迁移回填
+      // 兼容旧备份：导入/重置的数据若缺新字段则兜底为空数组；知识主题统一走迁移回填；投递统一做渠道→来源迁移
       return {
         ...action.state,
+        applications: migrateApplications(action.state.applications ?? []),
         knowledge: normalizeKnowledge(action.state.knowledge ?? []),
         questionBankMastered: action.state.questionBankMastered ?? [],
       };

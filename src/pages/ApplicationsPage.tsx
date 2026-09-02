@@ -1,11 +1,10 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { useAppData } from "../store/appStore";
-import type { ApplicationChannel, ApplicationPlatform, ApplicationStatus, CompanyTier, PositionKind } from "../types/domain";
+import type { ApplicationPlatform, ApplicationStatus, CompanyTier, PositionKind } from "../types/domain";
 
 const tiers: CompanyTier[] = ["冲刺", "主攻", "保底"];
-const channels: ApplicationChannel[] = ["官网", "牛客", "应届生", "学校就业网", "内推", "实习转正", "其他"];
-const platforms: ApplicationPlatform[] = ["Boss直聘", "猎聘", "官网", "牛客", "应届生", "学校就业网", "内推", "其他平台"];
+const platforms: ApplicationPlatform[] = ["Boss直聘", "猎聘", "官网", "牛客", "应届生", "学校就业网", "内推", "实习转正", "其他平台"];
 const statuses: ApplicationStatus[] = ["计划投递", "已投递", "笔试", "一面", "二面", "终面", "Offer", "已拒绝", "放弃"];
 const positionKinds: PositionKind[] = ["量化研究", "量化开发", "金融科技", "数据分析", "风控", "其他"];
 
@@ -17,8 +16,7 @@ export function ApplicationsPage() {
   // 快速录入表单
   const [company, setCompany] = useState("");
   const [tier, setTier] = useState<CompanyTier>("主攻");
-  const [channel, setChannel] = useState<ApplicationChannel>("官网");
-  const [platform, setPlatform] = useState<ApplicationPlatform | "">("");
+  const [platform, setPlatform] = useState<ApplicationPlatform | "">("官网");
   const [position, setPosition] = useState("");
   const [positionKind, setPositionKind] = useState<PositionKind>("量化研究");
   const [deadline, setDeadline] = useState("");
@@ -39,7 +37,6 @@ export function ApplicationsPage() {
     addApplication({
       company: name,
       tier,
-      channel,
       platform: platform || undefined,
       position: position.trim() || "量化研究员（2026 届）",
       positionKind,
@@ -47,7 +44,7 @@ export function ApplicationsPage() {
       url: url.trim() || undefined,
     });
     setCompany("");
-    setPlatform("");
+    setPlatform("官网");
     setPosition("");
     setDeadline("");
     setUrl("");
@@ -73,7 +70,6 @@ export function ApplicationsPage() {
         <form className="quick-form" onSubmit={submit}>
           <label>公司<input required value={company} onChange={(event) => setCompany(event.target.value)} placeholder="例如：启林投资" /></label>
           <label>分层<select value={tier} onChange={(event) => setTier(event.target.value as CompanyTier)}>{tiers.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-          <label>渠道<select value={channel} onChange={(event) => setChannel(event.target.value as ApplicationChannel)}>{channels.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
           <label>平台<select value={platform} onChange={(event) => setPlatform(event.target.value as ApplicationPlatform)}><option value="">未指定</option>{platforms.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
           <label>岗位<input value={position} onChange={(event) => setPosition(event.target.value)} placeholder="量化研究员（2026 届）" /></label>
           <label>类型<select value={positionKind} onChange={(event) => setPositionKind(event.target.value as PositionKind)}>{positionKinds.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
@@ -106,7 +102,7 @@ export function ApplicationsPage() {
         {visible.length ? (
           <div className="app-table">
             <div className="app-table-head">
-              <span>公司</span><span>分层</span><span>岗位</span><span>渠道</span><span>截止</span><span>状态</span><span></span>
+              <span>公司</span><span>分层</span><span>岗位</span><span>来源</span><span>截止</span><span>状态</span><span></span>
             </div>
             {visible.map((item) => (
               <div className="app-row" key={item.id}>
@@ -117,7 +113,7 @@ export function ApplicationsPage() {
                 </div>
                 <span><Badge tone={item.tier === "冲刺" ? "red" : item.tier === "主攻" ? "gold" : "blue"}>{item.tier}</Badge></span>
                 <span className="app-position">{item.position}<small>{item.positionKind}</small></span>
-                <span className="muted">{item.channel}{item.platform ? <small> · {item.platform}</small> : null}</span>
+                <span className="muted">{item.platform ?? "—"}</span>
                 <span className={isUrgent(item.deadline) ? "urgent-text" : "muted"}>{formatDeadline(item.deadline)}</span>
                 <span>
                   <select value={item.status} onChange={(event) => updateApplication(item.id, { status: event.target.value as ApplicationStatus })}>

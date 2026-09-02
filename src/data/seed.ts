@@ -21,13 +21,13 @@ function application(
   company: string,
   tier: Application["tier"],
   positionKind: Application["positionKind"] = "量化研究",
-  channel: Application["channel"] = "官网",
+  platform: Application["platform"] = "官网",
 ): Application {
   return {
     id: `seed-app-${company}`,
     company,
     tier,
-    channel,
+    platform,
     position: "量化研究员（2026 届）",
     positionKind,
     status: "计划投递",

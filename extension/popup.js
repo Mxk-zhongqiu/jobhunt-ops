@@ -6,7 +6,7 @@
 
 const STATUSES = ["计划投递", "已投递", "笔试", "一面", "二面", "终面", "Offer", "已拒绝", "放弃"];
 const TIERS = ["冲刺", "主攻", "保底"];
-const PLATFORMS = ["Boss直聘", "猎聘", "官网", "牛客", "应届生", "学校就业网", "内推", "其他平台"];
+const PLATFORMS = ["Boss直聘", "猎聘", "官网", "牛客", "应届生", "学校就业网", "内推", "实习转正", "其他平台"];
 
 const $ = (id) => document.getElementById(id);
 const elements = {

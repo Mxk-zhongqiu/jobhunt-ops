@@ -3,14 +3,12 @@
 
 export type CompanyTier = "冲刺" | "主攻" | "保底";
 
-export type ApplicationChannel = "官网" | "牛客" | "应届生" | "学校就业网" | "内推" | "实习转正" | "其他";
-
 export type ApplicationStatus = "计划投递" | "已投递" | "笔试" | "一面" | "二面" | "终面" | "Offer" | "已拒绝" | "放弃";
 
 export type PositionKind = "量化研究" | "量化开发" | "金融科技" | "数据分析" | "风控" | "其他";
 
-/** 招聘平台 / 来源站点（直聊场景：Boss直聘 / 猎聘 等）；区别于 channel（获投渠道） */
-export type ApplicationPlatform = "Boss直聘" | "猎聘" | "官网" | "牛客" | "应届生" | "学校就业网" | "内推" | "其他平台";
+/** 招聘平台 / 来源站点（直聊场景：Boss直聘 / 猎聘 等）；已并入原「渠道」语义，作为唯一来源维度 */
+export type ApplicationPlatform = "Boss直聘" | "猎聘" | "官网" | "牛客" | "应届生" | "学校就业网" | "内推" | "实习转正" | "其他平台";
 
 /** 一次状态变更记录（投递状态时间线，用于阶段耗时统计） */
 export interface ApplicationStatusChange {
@@ -23,7 +21,6 @@ export interface Application {
   id: string;
   company: string;
   tier: CompanyTier;
-  channel: ApplicationChannel;
   position: string;
   positionKind: PositionKind;
   status: ApplicationStatus;

@@ -20,18 +20,7 @@ const EXPIRY_SLACK_MS = 60_000; // 令牌到期前 1 分钟视为过期
 
 const STATUSES = ["计划投递", "已投递", "笔试", "一面", "二面", "终面", "Offer", "已拒绝", "放弃"];
 const TIERS = ["冲刺", "主攻", "保底"];
-const PLATFORMS = ["Boss直聘", "猎聘", "官网", "牛客", "应届生", "学校就业网", "内推", "其他平台"];
-// 平台 → 投递渠道（沿用网页端 channel 枚举；直聊平台记录为「其他」，平台本身记在 platform 字段）
-const CHANNEL_BY_PLATFORM = {
-  Boss直聘: "其他",
-  猎聘: "其他",
-  官网: "官网",
-  牛客: "牛客",
-  应届生: "应届生",
-  学校就业网: "学校就业网",
-  内推: "内推",
-  其他平台: "其他",
-};
+const PLATFORMS = ["Boss直聘", "猎聘", "官网", "牛客", "应届生", "学校就业网", "内推", "实习转正", "其他平台"];
 
 // ─── 工具 ───
 
@@ -252,7 +241,6 @@ function buildNewApplication(input) {
     id: `ext-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     company: (input.company || "").trim(),
     tier,
-    channel: platform ? CHANNEL_BY_PLATFORM[platform] || "其他" : "其他",
     platform,
     position: (input.position || "").trim() || "量化研究员（2026 届）",
     positionKind: input.positionKind || "其他",

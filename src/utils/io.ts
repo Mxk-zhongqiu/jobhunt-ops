@@ -36,12 +36,12 @@ function csvEscape(value: string) {
 
 /** 投递清单 → CSV（带 BOM，Excel 直接打开不乱码） */
 export function applicationsToCsv(applications: Application[]): string {
-  const headers = ["公司", "分层", "渠道", "岗位", "岗位类型", "状态", "截止日", "投递日期", "链接", "备注", "下一步"];
+  const headers = ["公司", "分层", "来源平台", "岗位", "岗位类型", "状态", "截止日", "投递日期", "链接", "备注", "下一步"];
   const rows = applications.map((item) =>
     [
       item.company,
       item.tier,
-      item.channel,
+      item.platform ?? "",
       item.position,
       item.positionKind,
       item.status,

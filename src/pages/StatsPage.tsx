@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { activeApplications, currentWeek, interviewApplications, useAppData } from "../store/appStore";
-import type { Application, ApplicationChannel, ApplicationPlatform, ApplicationStatus, CompanyTier } from "../types/domain";
+import type { Application, ApplicationPlatform, ApplicationStatus, CompanyTier } from "../types/domain";
 import "../styles/stats.css";
 
 /** 推进阶段序（用于判断"到达过某阶段"与相邻阶段耗时），已拒绝/放弃不计入阶段序 */
@@ -8,8 +8,7 @@ const STAGE_ORDER: Application["status"][] = ["计划投递", "已投递", "笔�
 /** 状态展示完整顺序（与投递页/总览一致） */
 const STATUS_ORDER: Application["status"][] = ["计划投递", "已投递", "笔试", "一面", "二面", "终面", "Offer", "已拒绝", "放弃"];
 const TIERS: CompanyTier[] = ["冲刺", "主攻", "保底"];
-const CHANNELS: ApplicationChannel[] = ["官网", "牛客", "应届生", "学校就业网", "内推", "实习转正", "其他"];
-const PLATFORMS: ApplicationPlatform[] = ["Boss直聘", "猎聘", "官网", "牛客", "应届生", "学校就业网", "内推", "其他平台"];
+const PLATFORMS: ApplicationPlatform[] = ["Boss直聘", "猎聘", "官网", "牛客", "应届生", "学校就业网", "内推", "实习转正", "其他平台"];
 
 /** 相邻阶段耗时统计的分组（含旧数据缺失中间状态时的别名键，如直接从计划投递进入笔试） */
 const STAGE_GROUPS: { label: string; keys: string[] }[] = [
@@ -121,7 +120,6 @@ export function StatsPage() {
     };
 
     const tierRows = toRows(TIERS, countBy(applications, (a) => a.tier));
-    const channelRows = toRows(CHANNELS, countBy(applications, (a) => a.channel));
     const platformRows = toRows(PLATFORMS, countBy(applications, (a) => a.platform ?? "未标注"), "未标注");
     const total = Math.max(1, applications.length);
 
@@ -176,7 +174,6 @@ export function StatsPage() {
       statusCounts,
       total,
       tierRows,
-      channelRows,
       platformRows,
       conversion,
       weekCounts,
@@ -217,13 +214,11 @@ export function StatsPage() {
 
       <section className="card">
         <div className="card-heading">
-          <h2>分层 / 渠道 / 平台分布</h2>
+          <h2>分层 / 来源平台分布</h2>
           <span>按当前全部投递计数（占比以总数 {applications.length} 计）</span>
         </div>
         <h3 className="stats-sub">按分层</h3>
         <Distribution rows={stats.tierRows} total={stats.total} tone="" />
-        <h3 className="stats-sub">按渠道</h3>
-        <Distribution rows={stats.channelRows} total={stats.total} tone="gold" />
         <h3 className="stats-sub">按来源平台</h3>
         <Distribution rows={stats.platformRows} total={stats.total} tone="blue" />
       </section>

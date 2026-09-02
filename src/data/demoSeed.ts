@@ -30,7 +30,7 @@ function buildApplications(now: string): Application[] {
   const application = (
     company: string,
     tier: Application["tier"],
-    channel: Application["channel"],
+    platform: Application["platform"],
     status: Application["status"],
     positionKind: Application["positionKind"] = "量化研究",
     extra: Partial<Pick<Application, "deadline" | "appliedAt" | "position" | "url" | "note" | "nextAction">> = {},
@@ -40,7 +40,7 @@ function buildApplications(now: string): Application[] {
       id: `demo-app-${seq}`,
       company,
       tier,
-      channel,
+      platform,
       position: extra.position ?? "量化研究员（2026 届）",
       positionKind,
       status,
