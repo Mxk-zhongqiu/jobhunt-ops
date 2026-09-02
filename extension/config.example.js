@@ -6,4 +6,5 @@ globalThis.EXT_CONFIG = {
   apiKey: "AIzaSy...", // VITE_FIREBASE_API_KEY
   authDomain: "jobhunt-ops.firebaseapp.com", // VITE_FIREBASE_AUTH_DOMAIN
   projectId: "jobhunt-ops", // VITE_FIREBASE_PROJECT_ID
+  aiProxyUrl: "https://your-worker.workers.dev", // VITE_AI_PROXY_URL（云端 AI 代理，P1 打招呼/回复用）
 };

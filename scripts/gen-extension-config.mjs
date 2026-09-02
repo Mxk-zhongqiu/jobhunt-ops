@@ -21,15 +21,20 @@ for (const line of readFileSync(envPath, "utf8").split(/\r?\n/)) {
   if (match) env[match[1]] = match[2];
 }
 
-const { VITE_FIREBASE_API_KEY: apiKey, VITE_FIREBASE_AUTH_DOMAIN: authDomain, VITE_FIREBASE_PROJECT_ID: projectId } = env;
+const {
+  VITE_FIREBASE_API_KEY: apiKey,
+  VITE_FIREBASE_AUTH_DOMAIN: authDomain,
+  VITE_FIREBASE_PROJECT_ID: projectId,
+  VITE_AI_PROXY_URL: aiProxyUrl,
+} = env;
 if (!apiKey || !projectId) {
   console.error(".env 缺少 VITE_FIREBASE_API_KEY / VITE_FIREBASE_PROJECT_ID，无法生成 extension/config.js");
   process.exit(1);
 }
 
 const content = `// 本文件由 \`npm run ext:config\` 从仓库根目录 .env 自动生成；修改 .env 后重新运行即可。
-// 内容为 Firebase Web 公网凭据（与网站生产构建一致，非机密）；真正的密钥只存在于服务端。
-globalThis.EXT_CONFIG = ${JSON.stringify({ apiKey, authDomain, projectId }, null, 2)};
+// 内容为 Firebase Web 公网凭据与 AI 代理公网地址（与网站生产构建一致，非机密）；真正的密钥只存在于服务端。
+globalThis.EXT_CONFIG = ${JSON.stringify({ apiKey, authDomain, projectId, aiProxyUrl: aiProxyUrl || "" }, null, 2)};
 `;
 
 writeFileSync(outPath, content, "utf8");
