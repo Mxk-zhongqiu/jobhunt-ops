@@ -55,6 +55,7 @@
   let shadow = null;
   let bubbleEl = null;
   let panelEl = null;
+  let lastDragAt = 0; // 最近一次真实拖动结束时间（用于抑制拖动后的误点击）
 
   function readKey(key) {
     return chrome.storage.local.get(key).then((stored) => stored[key]);
@@ -125,34 +126,61 @@
   }
 
   function attachDrag(handle) {
-    handle.addEventListener("pointerdown", (event) => {
+    let startX = null;
+    let startY = null;
+    let originLeft = 0;
+    let originTop = 0;
+    let captured = false;
+    let moved = false;
+
+    const onDown = (event) => {
       if (event.button !== 0) return;
-      event.preventDefault();
-      handle.setPointerCapture?.(event.pointerId);
-      const startX = event.clientX;
-      const startY = event.clientY;
+      startX = event.clientX;
+      startY = event.clientY;
       const rect = wrapEl.getBoundingClientRect();
-      const originLeft = rect.left;
-      const originTop = rect.top;
-      let moved = false;
-      const onMove = (moveEvent) => {
+      originLeft = rect.left;
+      originTop = rect.top;
+      captured = false;
+      moved = false;
+    };
+    const onMove = (event) => {
+      if (startX === null) return;
+      const dx = event.clientX - startX;
+      const dy = event.clientY - startY;
+      // 移动超过阈值才进入拖拽（捕获指针）；否则保持普通点击语义（标题栏内按钮可点）
+      if (!captured && Math.abs(dx) > 4 && Math.abs(dy) > 4) {
+        captured = true;
+        try {
+          handle.setPointerCapture?.(event.pointerId);
+        } catch (_) {
+          /* 忽略 */
+        }
+      }
+      if (captured) {
         const mode = currentMode();
         const w = sizeFor(mode);
         const h = mode === "panel" ? Math.max(200, wrapEl.getBoundingClientRect().height || 560) : 58;
-        const clamped = clampPos(originLeft + moveEvent.clientX - startX, originTop + moveEvent.clientY - startY, w, h);
+        const clamped = clampPos(originLeft + dx, originTop + dy, w, h);
         applyPosition(clamped);
         moved = true;
-      };
-      const onUp = () => {
-        handle.removeEventListener("pointermove", onMove);
-        handle.removeEventListener("pointerup", onUp);
-        handle.removeEventListener("pointercancel", onUp);
-        if (moved) persistPosition();
-      };
-      handle.addEventListener("pointermove", onMove);
-      handle.addEventListener("pointerup", onUp);
-      handle.addEventListener("pointercancel", onUp);
-    });
+      }
+    };
+    const onEnd = () => {
+      if (startX === null) return;
+      if (moved) {
+        lastDragAt = Date.now();
+        persistPosition();
+      }
+      startX = null;
+      startY = null;
+      captured = false;
+      moved = false;
+    };
+
+    handle.addEventListener("pointerdown", onDown);
+    handle.addEventListener("pointermove", onMove);
+    handle.addEventListener("pointerup", onEnd);
+    handle.addEventListener("pointercancel", onEnd);
   }
 
   async function destroy() {
@@ -206,7 +234,11 @@
     iframe.setAttribute("title", "求职作战台");
     panelEl.append(bar, iframe);
 
-    bubbleEl.addEventListener("click", () => showPanel());
+    bubbleEl.addEventListener("click", () => {
+      // 拖动结束后的回落点击不触发展开
+      if (Date.now() - lastDragAt < 350) return;
+      showPanel();
+    });
     collapseBtn.addEventListener("click", () => showBubble());
     exitBtn.addEventListener("click", () => disableAndDestroy());
     attachDrag(bubbleEl);
