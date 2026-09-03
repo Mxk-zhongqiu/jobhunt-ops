@@ -25,14 +25,25 @@ import { findEdgeExecutable, defaultProfileDir } from "../browser/edge-launcher.
 const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const STATE_FILE = resolve(PROJECT_ROOT, ".edge-profile", "state.json");
 const BACKUP_DIR = resolve(PROJECT_ROOT, ".edge-profile", "backups");
-const STORAGE_KEY = "jobhunt-ops-state-v1";
+const STORAGE_PREFIX = "jobhunt-ops-state-v1";
 const DEFAULT_BASE = "http://127.0.0.1:8801";
 const DEFAULT_KEEP = 20;
+
+// 读取"当前生效"状态槽：已登录时应用数据落在带 :uid 的账号槽，未登录落在游客槽（键即前缀）。
+// 两者兼容：优先账号槽，无账号槽时退回游客槽。
+async function readActiveState(page) {
+  return page.evaluate((prefix) => {
+    const keys = Object.keys(window.localStorage).filter((k) => k === prefix || k.startsWith(prefix + ":"));
+    if (!keys.length) return null;
+    const key = keys.find((k) => k.includes(":")) ?? keys[0];
+    return window.localStorage.getItem(key);
+  }, STORAGE_PREFIX);
+}
 
 // ─── 枚举字典（与 src/types/domain.ts 保持一致） ─────────────────────────────
 const ENUMS = {
   tier: ["冲刺", "主攻", "保底"],
-  channel: ["官网", "牛客", "应届生", "学校就业网", "内推", "实习转正", "其他"],
+  platform: ["Boss直聘", "猎聘", "官网", "牛客", "应届生", "学校就业网", "内推", "实习转正", "其他平台"],
   status: ["计划投递", "已投递", "笔试", "一面", "二面", "终面", "Offer", "已拒绝", "放弃"],
   positionKind: ["量化研究", "量化开发", "金融科技", "数据分析", "风控", "其他"],
   milestoneStatus: ["pending", "active", "done"],
@@ -41,6 +52,17 @@ const ENUMS = {
   topicStatus: ["未开始", "学习中", "已掌握"],
   pointDepth: ["基础", "进阶"],
   aiProvider: ["mock", "deepseek"],
+};
+
+// 旧「渠道(channel)」→「来源平台(platform)」兼容映射（应用端已自动迁移；这里放行旧 state 里的历史 channel 值）
+const LEGACY_CHANNEL_MAP = {
+  官网: "官网",
+  牛客: "牛客",
+  应届生: "应届生",
+  学校就业网: "学校就业网",
+  内推: "内推",
+  实习转正: "实习转正",
+  其他: "其他平台",
 };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -108,7 +130,13 @@ export function validateState(state) {
       if (typeof a !== "object" || a === null) return err(p, "不是对象");
       if (!isNonEmptyString(a.company)) err(`${p}.company`, "缺失或为空");
       checkEnum(`${p}.tier`, a.tier, ENUMS.tier);
-      checkEnum(`${p}.channel`, a.channel, ENUMS.channel);
+      // 来源平台是唯一来源维度：新记录校验 platform；旧记录若仍带 channel（且无 platform），能映射则放行、不能则提示改为 platform
+      const legacyPlatform = LEGACY_CHANNEL_MAP[a.channel];
+      if (a.channel !== undefined && a.platform === undefined && legacyPlatform === undefined) {
+        err(`${p}.channel`, `旧「渠道」值 "${a.channel}" 无法映射到来源平台，请改为 platform 字段`);
+      } else if (a.platform !== undefined) {
+        checkEnum(`${p}.platform`, a.platform, ENUMS.platform);
+      }
       if (!isNonEmptyString(a.position)) err(`${p}.position`, "缺失或为空");
       checkEnum(`${p}.positionKind`, a.positionKind, ENUMS.positionKind);
       checkEnum(`${p}.status`, a.status, ENUMS.status);
@@ -302,9 +330,9 @@ async function cmdExport({ base, out, headless }) {
     const page = await context.newPage();
     await page.goto(base + "/data", { waitUntil: "domcontentloaded", timeout: 45000 });
     await page.waitForTimeout(1800); // 等 SPA 挂载与状态加载
-    const raw = await page.evaluate((key) => window.localStorage.getItem(key) ?? null, STORAGE_KEY);
+    const raw = await readActiveState(page);
     if (!raw) {
-      console.error(`❌ ${base} 在该浏览器 profile 的 localStorage 中没有数据（键 ${STORAGE_KEY}）。`);
+      console.error(`❌ ${base} 在该浏览器 profile 的 localStorage 中没有数据（游客槽 ${STORAGE_PREFIX} 或账号槽 ${STORAGE_PREFIX}:<uid>）。`);
       console.error(`   可能原因：应用从未用此 profile 打开过该 origin；或浏览器处于演示预览模式（不写存储）。`);
       console.error(`   解决：先在真实模式下打开 ${base} 一次，再重试 export。`);
       process.exit(1);
@@ -394,7 +422,7 @@ async function cmdApply({ file, base, headless }) {
     }
 
     // 双保险：应用前先备份应用内当前状态
-    const rawBefore = await page.evaluate((key) => window.localStorage.getItem(key) ?? null, STORAGE_KEY);
+    const rawBefore = await readActiveState(page);
     if (rawBefore) {
       mkdirSync(BACKUP_DIR, { recursive: true });
       const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15);
@@ -420,18 +448,19 @@ async function cmdApply({ file, base, headless }) {
 
     // 验证：读回 localStorage 与源文件比对（等待云端回显/写盘稳定）
     await page.waitForTimeout(2000);
-    const rawAfter = await page.evaluate((key) => window.localStorage.getItem(key) ?? null, STORAGE_KEY);
-    const sourceJson = JSON.stringify(state, null, 2);
-    if (rawAfter === sourceJson) {
-      console.log("✅ 验证通过：应用内 localStorage 与 state.json 完全一致。");
+    const rawAfter = await readActiveState(page);
+    let after = null;
+    try {
+      after = JSON.parse(rawAfter);
+    } catch {
+      /* 解析失败按不一致处理 */
+    }
+    // 深度比较（消除"源格式化 vs 页面紧凑"的字符串格式误报）
+    const equal = after !== null && JSON.stringify(after) === JSON.stringify(state);
+    if (equal) {
+      console.log("✅ 验证通过：应用内状态与 state.json 完全一致。");
       printSummary(state);
     } else {
-      let after = null;
-      try {
-        after = JSON.parse(rawAfter);
-      } catch {
-        /* 解析失败按不一致处理 */
-      }
       const diff =
         after && Array.isArray(after.applications)
           ? `投递 ${after.applications.length}（源 ${state.applications.length}）· 面试 ${after.interviews.length}（源 ${state.interviews.length}）`

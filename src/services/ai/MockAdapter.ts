@@ -61,6 +61,16 @@ export class MockAdapter implements AIService {
       };
     }
 
+    if (request.capability === "rewrite") {
+      return {
+        kind: "rewrite" as const,
+        style: "量化岗语言",
+        original: request.userInstruction,
+        rewritten: "（Mock 示例）量化岗语言版本：突出因子研究、回测验证与风控意识，保留真实事实不夸大。配置 DEEPSEEK_API_KEY 并切换提供商后将生成真实改写。",
+        notes: "当前为本地示例草稿，仅用于流程预览。",
+      };
+    }
+
     const topicText = selectedTopics.length
       ? `，重点结合你选择的主题：${selectedTopics.map((item) => {
           const points = item.points ?? [];

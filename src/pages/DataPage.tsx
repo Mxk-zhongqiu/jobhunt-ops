@@ -72,7 +72,7 @@ export function DataPage() {
   return (
     <div className="page">
       <section className="card">
-        <div className="card-heading"><h2>导出备份</h2><span>数据只保存在本机浏览器，请定期导出</span></div>
+        <div className="card-heading"><h2>导出备份</h2><span>数据保存在本机游客区 / 当前账号，并自动同步云端，建议定期导出</span></div>
         <div className="data-actions">
           <button type="button" className="primary" onClick={exportJson}><Download size={16} /> 导出完整备份（JSON）</button>
           <button type="button" className="soft" onClick={exportCsv}><FileSpreadsheet size={16} /> 导出投递清单（CSV）</button>

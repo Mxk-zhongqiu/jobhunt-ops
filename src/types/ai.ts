@@ -5,7 +5,8 @@ export type AICapability =
   | "ask"       // 知识问答：基于授权上下文回答，不写入
   | "review"    // 面试复盘草稿：生成可确认写入面试记录的复盘
   | "resume"    // 简历要点翻译：把经历翻译成量化岗语言（不写入，可复制）
-  | "knowledge"; // 知识点生成：为主题生成知识点草稿，确认后写入知识主题
+  | "knowledge" // 知识点生成：为主题生成知识点草稿，确认后写入知识主题
+  | "rewrite";  // 经历改写：把素材改写成目标岗位语言（确认后写入素材库/版本定制）
 
 export interface AIContextSelection {
   interviewIds: string[];
@@ -38,7 +39,8 @@ export type AIProposalPayload =
       nextActions: string[];
     }
   | { kind: "resume"; original: string; translated: string; keywords: string[] }
-  | { kind: "knowledge"; topicName: string; points: KnowledgeDraftPoint[] };
+  | { kind: "knowledge"; topicName: string; points: KnowledgeDraftPoint[] }
+  | { kind: "rewrite"; style: string; original: string; rewritten: string; notes?: string };
 
 export interface AIProposal {
   id: string;

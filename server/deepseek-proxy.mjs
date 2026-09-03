@@ -64,6 +64,9 @@ function schemaInstruction(capability) {
   if (capability === "knowledge") {
     return `${shared} 格式：{"kind":"knowledge","topicName":"目标主题名","points":[{"title":"知识点名","summary":"核心要点，≤2 句（含公式/结论/面试答法）","depth":"基础或进阶，可不填"}]}；生成 6–12 个知识点，覆盖该主题核心考点，结合授权上下文中的已有知识点避免重复；summary 务必精简，控制总输出长度。`;
   }
+  if (capability === "rewrite") {
+    return `${shared} 格式：{"kind":"rewrite","style":"目标岗位语言风格","original":"原文（与用户提供一致）","rewritten":"改写后的岗位语言版本，保留真实事实不夸大，要点式表达","notes":"1 条改写说明"}`;
+  }
   return `${shared} 格式：{"kind":"answer","content":"..."}`;
 }
 

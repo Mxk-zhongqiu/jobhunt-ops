@@ -1,12 +1,13 @@
 import { useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
-import { CloudOff, LogIn, LogOut, UploadCloud } from "lucide-react";
+import { CloudOff, LogIn, LogOut } from "lucide-react";
 import { mapAuthError } from "../../services/firebase";
 import { useAppData } from "../../store/appStore";
 
-/** 顶栏账号组件：未登录 → 登录/注册弹窗；已登录 → 邮箱 + 同步状态 + 退出（含首次上传本机数据） */
+/** 顶栏账号组件：未登录 → 登录/注册弹窗；已登录 → 邮箱 + 同步状态 + 退出。
+ *  未绑定数据的"并入/保留"提示由 SyncClaims 横幅负责（见 AppShell）。 */
 export function AuthWidget() {
-  const { user, syncStatus, cloudEmpty, login, register, logout, uploadLocalToCloud } = useAppData();
+  const { user, syncStatus, cloudEmpty, login, register, logout } = useAppData();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
@@ -45,7 +46,7 @@ export function AuthWidget() {
   };
 
   const statusLabel =
-    syncStatus === "syncing" ? "同步中…" : syncStatus === "error" ? "同步异常" : cloudEmpty ? "云端待上传" : "已云端同步";
+    syncStatus === "syncing" ? "同步中…" : syncStatus === "error" ? "同步异常" : cloudEmpty ? "云端待处理" : "已云端同步";
 
   return (
     <div className="auth-widget">
@@ -53,19 +54,6 @@ export function AuthWidget() {
         <div className="auth-user">
           <span className="auth-email" title={user.email}>{user.email}</span>
           <span className={`provider-status ${syncStatus === "synced" ? "ok" : "no"}`}>{statusLabel}</span>
-          {cloudEmpty ? (
-            <button
-              type="button"
-              className="soft small"
-              onClick={() => {
-                if (window.confirm("把本机当前数据上传到云端，开始跨设备同步？上传后手机/电脑登录同一账号即可互通。")) {
-                  void uploadLocalToCloud();
-                }
-              }}
-            >
-              <UploadCloud size={14} /> 上传本机数据
-            </button>
-          ) : null}
           <button type="button" className="soft small" onClick={handleLogout}><LogOut size={14} /> 退出</button>
         </div>
       ) : (
@@ -78,7 +66,7 @@ export function AuthWidget() {
         <div className="auth-overlay" onClick={() => setOpen(false)}>
           <form className="auth-card" onClick={(event) => event.stopPropagation()} onSubmit={submit}>
             <h3>{mode === "login" ? "登录" : "注册账号"}</h3>
-            <p className="auth-hint">登录后数据自动与云端同步，多设备互通；本地数据仍会保留。</p>
+            <p className="auth-hint">登录后使用该账号自己的云端数据，跨设备互通；本机未登录的游客数据需在登录后确认并入，不会自动混入账号。</p>
             <label>邮箱
               <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="email" placeholder="you@example.com" />
             </label>

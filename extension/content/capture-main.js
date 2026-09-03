@@ -8,8 +8,10 @@
   window.__jhCaptureMainInstalled__ = true;
 
   const MAX_RAW = 300000; // 单条响应保留上限（字符）
-  const MAX_ENTRIES = 3;
+  const MAX_ENTRIES = 8;
   const URL_HINT = /job|position|geek|detail|search|recommend|wapi|zpgeek|friend|gc/i;
+  // “详情类”接口优先保留（避免被 toggle/公共配置等高频小接口挤出内存环）
+  const STRONG_HINT = /detail|jobdetail|job_desc|jobDesc|jobDescription|position|geek|jobinfo|jobInfo|jobDetail/i;
 
   const cache = [];
   const stats = { fetch: 0, xhr: 0, captured: 0, lastFilter: "none", lastUrl: "" };
@@ -44,8 +46,12 @@
         stats.lastFilter = "not-json";
         return;
       }
-      cache.push({ url, raw: text.slice(0, MAX_RAW) });
-      while (cache.length > MAX_ENTRIES) cache.shift();
+      cache.push({ url, raw: text.slice(0, MAX_RAW), strong: STRONG_HINT.test(url) });
+      // 优先级淘汰：先挤掉非详情类旧条目，仍超限再丢最旧
+      if (cache.length > MAX_ENTRIES) {
+        const weakIndex = cache.findIndex((entry) => !entry.strong);
+        cache.splice(weakIndex >= 0 ? weakIndex : 0, 1);
+      }
       stats.captured += 1;
       stats.lastUrl = url.slice(0, 200);
       stats.lastFilter = "captured";

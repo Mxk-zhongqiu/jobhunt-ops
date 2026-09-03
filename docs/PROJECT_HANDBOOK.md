@@ -70,15 +70,20 @@ F:\jobhunt-ops\
 └── src/
     ├── main.tsx                # React 挂载
     ├── app/
-    │   ├── App.tsx             # AppDataProvider + AppShell + Outlet
-    │   └── router.tsx          # 9 条路由（见 §6）
+    │   ├── App.tsx             # AppDataProvider + ResumeProvider + AppShell + Outlet
+    │   └── router.tsx          # 10 条路由（见 §6）
     ├── components/
-    │   ├── layout/AppShell.tsx # 侧边栏(9项) + 顶栏（含账号组件）+ 当前周徽章
+    │   ├── layout/AppShell.tsx # 侧边栏(10项) + 顶栏（含账号组件）+ 当前周徽章
     │   ├── auth/AuthWidget.tsx # ★ 登录/注册弹窗 + 同步状态 + 上传本机数据（见 §14）
-    │   └── ai/AIWorkspace.tsx  # ★ AI 助手（能力/上下文授权/草稿确认）
-    ├── pages/                  # 9 个页面（见 §6）
+    │   ├── ai/AIWorkspace.tsx  # ★ AI 助手（能力/上下文授权/草稿确认）
+    │   └── resume/             # ★ 简历板块组件（见 §6.1）
+    │       ├── ResumeDocument.tsx   # 版本简历文档（所见即所得 + 行内编辑）
+    │       ├── MaterialDrawer.tsx   # 素材库抽屉（纳入/移出版本、增删改、AI 改写入口）
+    │       └── MaterialEditor.tsx   # 素材编辑器（库级编辑 / 版本定制）
+    ├── pages/                  # 10 个页面（见 §6）
     │   ├── OverviewPage.tsx
     │   ├── ApplicationsPage.tsx
+    │   ├── ResumePage.tsx      # ★ 简历板块主页面（版本标签页 + 文档 + 抽屉 + 导出 + AI 改写）
     │   ├── PlanPage.tsx
     │   ├── ProjectsPage.tsx
     │   ├── KnowledgePage.tsx
@@ -88,7 +93,9 @@ F:\jobhunt-ops\
     │   └── DataPage.tsx
     ├── data/seed.ts            # ★ 种子数据（真实初始清单；零顶层副作用，所有构建均使用）
     ├── data/demoSeed.ts        # ★ 「游客预览」演示数据（虚构，仅 appStore.previewDemo 使用）
+    ├── data/resumeSeed.ts      # ★ 简历素材库 + 默认版本种子（来自 resume-2026.md）
     ├── store/appStore.tsx      # ★ 状态 + localStorage 持久化 + 云同步（Firestore）+ 派生工具（见 §14）
+    ├── store/resumeStore.tsx   # ★ 简历板块独立存储（localStorage jobhunt-ops-resume-v1 + Firestore resumes/{uid}，同 appStore 模式）
     ├── services/
     │   ├── firebase.ts         # ★ Firebase 初始化/认证/错误映射（未配置 .env 时整模块禁用）
     │   └── ai/                 # ★ AI 服务层（见 §7）
@@ -98,10 +105,12 @@ F:\jobhunt-ops\
     │       └── DeepSeekAdapter.ts  # 开发走本地代理 / 生产走云函数 + 响应校验
     ├── types/
     │   ├── domain.ts           # ★ 数据契约（见 §4）
+    │   ├── resume.ts           # ★ 简历板块契约：ResumeMaterial / ResumeVersion / ResumeState（见 §4.4）
     │   └── ai.ts               # AI 契约（见 §7）
     ├── utils/io.ts             # 下载/CSV/备份校验/isAppState
     ├── utils/questionBank.ts   # 面试题库汇总（拆分/规范化去重/频率排序/Markdown 生成）
-    └── styles/globals.css      # 全部样式（含 AI 工作区、数据管理页、面试题库、账号组件）
+    ├── utils/resumeExport.ts   # ★ 简历渲染与导出（Markdown/HTML/纯文本/打印视图，页面与导出共用）
+    └── styles/globals.css      # 全部样式（含 AI 工作区、数据管理页、面试题库、账号组件、简历板块）
 ```
 
 ---
@@ -112,7 +121,7 @@ F:\jobhunt-ops\
 
 | 对象 | 关键字段 | 说明 |
 |---|---|---|
-| `Application` 投递 | company, tier(冲刺/主攻/保底), channel(官网/牛客/应届生/学校就业网/内推/实习转正/其他), position, positionKind(量化研究/量化开发/金融科技/数据分析/风控/其他), **status 状态机**, deadline, appliedAt, url, note, nextAction | 核心对象，见状态机 |
+| `Application` 投递 | company, tier(冲刺/主攻/保底), **platform(来源平台，可选：Boss直聘/猎聘/官网/牛客/应届生/学校就业网/内推/实习转正/其他平台；2026-09 起取代旧 channel)**, position, positionKind(量化研究/量化开发/金融科技/数据分析/风控/其他), **status 状态机**, deadline, appliedAt, url, jdSummary?, **statusHistory[]**(状态时间线，状态变更自动追加), note, nextAction | 核心对象，见状态机 |
 | `InterviewLog` 面试记录 | company, round(笔试/一面/二面/终面/HR面), date, **questions**(换行分隔), **review**(复盘，AI 确认后写入), nextAction | |
 | `WeeklyPlan` 周计划 | week(1–10), label, tasks[] | tasks 为 `PlanTask{id,text,done}` |
 | `QuantProject` 项目 | name, goal, status(active/paused/done), milestones[], output(GitHub/报告链接) | |
@@ -120,6 +129,17 @@ F:\jobhunt-ops\
 | `KnowledgeTopic` 知识主题 | category(数学/统计、编程、金融与量化、机器学习、面试准备), name, priority(高频/必考/加分), status(未开始/学习中/已掌握) | |
 | `AppSettings` 设置 | targetName, **startDate**(周次基准), dailySubmitTarget, totalTarget, **aiProvider**(mock/deepseek) | |
 | `AppState` 总状态 | 以上全部集合 + `questionBankMastered`(string[]，已掌握题目的规范化键) | 整个对象被序列化持久化 |
+
+### 4.4 简历板块模型（独立存储，见 §6.1）
+
+简历板块**不并入 AppState**，走独立存储 `src/types/resume.ts` + `src/store/resumeStore.tsx`（localStorage 游客键 `jobhunt-ops-resume-v1`，登录后按账号分区 `jobhunt-ops-resume-v1:<uid>` + Firestore `resumes/{uid}`，规则同 states 按 uid 隔离）。
+
+| 对象 | 关键字段 | 说明 |
+|---|---|---|
+| `ResumeMaterial` 素材 | category(basic/education/experience/project/**leadership(任职经历)**/skill/honor/selfIntro), title, subtitle, **fields**(键值字段，如 时间/角色/链接), **content**(要点列表), tags(量化/视觉/通用) | 单一数据源；改一次全局同步 |
+| `ResumeVersion` 版本 | name, targetRole, **jobIntent**(岗位/城市/薪资/到岗/技能标签，招聘软件字段按版本独立), **blocks**(纳入的素材+order+override), attachment(PDF 附件) | 版本=挑选+排序+微调 |
+| `ResumeVersionBlock.override` | title/subtitle/content 覆盖 | 版本内定制（"已定制"标记），可恢复原文 |
+| `ResumeState` | materials[] + versions[] | 独立序列化持久化 |
 
 ### 4.2 投递状态机
 
@@ -146,26 +166,28 @@ F:\jobhunt-ops\
 ```
 页面组件 ── useAppData() ──▶ AppStoreValue（state 字段 + action 方法）
                                 │
-                     useReducer(reducer, loadState)
+                     useReducer(reducer, 初始读当前空间槽)
                                 │
-              loadState(): seed ──merge──▶ localStorage("jobhunt-ops-state-v1")
+         游客槽 localStorage("jobhunt-ops-state-v1")；登录后账号槽 localStorage("jobhunt-ops-state-v1:<uid>")
                                 │
-        每次 state 变化 → useEffect → JSON.stringify 全量写回 localStorage
+        每次 state 变化 → useEffect → JSON.stringify 全量写回"当前空间"的本地槽
 ```
 
-- **唯一持久化点**：`localStorage` 键 `jobhunt-ops-state-v1`。
+- **本地持久化点（按账号空间隔离）**：未登录用游客键 `jobhunt-ops-state-v1`（向后兼容老版本单键数据）；登录后读写 `jobhunt-ops-state-v1:<uid>`，账号之间、账号与游客之间互不串扰（简历板块同模式：`jobhunt-ops-resume-v1` / `...:<uid>`）。登出 = 切回游客槽，界面不再显示上一账号数据。
+- **登录认领语义**：登录后先切到该账号自己的槽（缓存或种子）；云端无该账号数据且游客槽有"非纯种子"数据时，界面出现认领横幅——「并入当前账号」（上传云端并清游客槽）或「保留在游客区」（游客数据留在本机，账号以全新状态开始）。云端已有数据时自动覆盖本地并以内容比对清理一致的旧单键残留，绝不静默把游客/他人数据写进该账号云端。
 - **种子合并**：`mergeState(seed, stored)`——加载时用种子兜底、以存储覆盖（`settings` 做浅合并，因此新增设置字段对老用户自动生效）。
 - **新增能力套路**：① 在 `domain.ts` 加字段/对象 → ② `seed.ts` 补初始值 → ③ `appStore.tsx` 加 action 类型 + reducer 分支 + 接口方法 + value 实现 → ④ 页面消费。**勿忘 ③ 的四处都要加**（类型联合 / reducer / AppStoreValue 接口 / useMemo value）。
 - **序列化安全**：只有纯数据字段进状态；方法不落盘（`DataPage` 导出时显式只挑数据字段）。
 
 ---
 
-## 6. 功能清单（9 页面）
+## 6. 功能清单（10 页面）
 
 | 路由 | 页面 | 核心功能 |
 |---|---|---|
 | `/` | 作战总览 | 4 指标卡（已投/推进中/面试/Offer）+ 投递漏斗（9 状态计数）+ 本周重点（可勾选）+ 7 天内截止（红字紧急）+ 项目推进条 |
 | `/applications` | 投递追踪 | 快速录入表单（6 字段+链接）+ 状态/分层筛选 + 清单表格（内联改状态、标记已投、删除） |
+| `/resume` | 简历 | 见 §6.1 |
 | `/plan` | 周计划 | W1–W10 页签 + 任务勾选/增删 + 进度条 + 节奏提醒卡（文档金句） |
 | `/projects` | 项目 | 项目1（多因子，7 里程碑）、项目2（配对交易/ML，5 里程碑）；里程碑勾选、进度、交付链接 |
 | `/knowledge` | 知识 | 5 分类分组 + 优先级徽章 + 三态进度；顶部统计 |
@@ -174,7 +196,17 @@ F:\jobhunt-ops\
 | `/ai` | AI 助手 | 见 §7 |
 | `/data` | 数据管理 | JSON 全量导出 / 投递 CSV 导出（带 BOM）/ 文件导入（校验+预览+覆盖）/ 重置种子 |
 
-侧边栏 9 项导航，顶栏显示当前页标题与日期；无独立设置页，`targetName/startDate/投递目标` 改 `seed.ts` 的 `settings`（或后续加设置页）。
+侧边栏 10 项导航，顶栏显示当前页标题与日期；无独立设置页，`targetName/startDate/投递目标` 改 `seed.ts` 的 `settings`（或后续加设置页）。
+
+### 6.1 简历板块（`/resume`）
+
+- **布局**：顶部版本标签页（量化岗版 / 视觉算法岗版 / 新建版本）→ 左侧当前版本完整简历文档（所见即所得）→ 右侧素材库抽屉（可收起）；
+- **素材库 + 版本挑选**：素材统一存放，版本通过 blocks 挑选/排序；素材改动全局同步，版本内可微调（override，带"已定制"标记，可恢复原文）；
+- **招聘软件字段**：求职意向（目标岗位/期望城市/期望薪资/到岗时间/技能标签）按版本独立填写，另含自我评价素材与附件（PDF）；
+- **导出**：版本独立导出，默认 PDF（`window.print()` 打印视图，portal 到 body），另支持 Markdown / HTML / 纯文本（粘贴招聘软件表单）；
+- **AI 经历改写**（能力 `rewrite`，见 §7.1）：选中素材 → 选风格（量化岗语言/视觉算法岗语言/通用精炼）→ 生成草稿 → 应用到当前版本（版本定制）/ 更新素材库 / 另存为新素材；
+- **种子**：`data/resumeSeed.ts` 由 `.edge-profile/resume/resume-2026.md` 生成，默认两版本（量化岗版含多因子/配对交易；视觉算法岗版含 FD-BEVFusion/无人机追踪，自我评价已演示"已定制"）；
+- **持久化**：localStorage 游客键 `jobhunt-ops-resume-v1`、登录后账号槽 `jobhunt-ops-resume-v1:<uid>` + Firestore `resumes/{uid}`（见 §14.2），与主状态互不干扰。
 
 ---
 
@@ -187,6 +219,7 @@ F:\jobhunt-ops\
 | `ask` 知识问答 | 基于授权上下文回答 | 否（确认已读） |
 | `review` 面试复盘草稿 | 生成总结/做得好/不足/下一步 | **是**：确认后 `updateInterview(id,{review:...})` 写入所选面试记录 |
 | `resume` 简历要点翻译 | 经历原文 → 量化岗语言 + 关键词 | 否（可复制） |
+| `rewrite` 经历改写（简历板块） | 素材 → 目标岗位语言（量化/视觉/通用） | **是**：确认后 版本定制 / 更新素材库 / 另存新素材 |
 
 ### 7.2 数据流
 
@@ -270,7 +303,7 @@ cd functions && npm install && cd ..   # 云函数依赖（仅 Blaze 备选方�
 
 1. **端口**：5173 落在本机 Windows 保留端口段（Hyper-V 保留 5141–5240，`netsh interface ipv4 show excludedportrange protocol=tcp` 可查），绑定即 EACCES。因此前端用 **8801**、AI 代理 **8802**，且 `vite.config.ts` 显式 `host:"127.0.0.1"`（避开 ::1）。**不要改回 5173**；换端口用 `--port` 参数。
 2. **年份差异**：秋招文档快照写 "2025-08-18"，而本机系统时钟为 2026-08-18。种子 `settings.startDate="2026-08-18"` 使"今天=第 1 周"成立。若实际日期不同，改 startDate 即自动校准周次。
-3. **持久化语义**：未登录时 localStorage 是唯一存储（清浏览器数据即丢数据，`/data` 导出备份是刚需）；登录后本地 + 云端 Firestore 双写（云端为真、本地为备份，见 §14）。新增字段走 `mergeState`（settings 浅合并，数组以存储为准）；云端文档整份覆盖（`replace-state`），字段缺失有兜底。
+3. **持久化语义**：未登录时游客槽 localStorage 是唯一存储（清浏览器数据即丢数据，`/data` 导出备份是刚需）；登录后本地按账号分区（`<键>:<uid>`）+ 云端 Firestore 双写（云端为真、本地为备份、账号间隔离，见 §14）。登出切回游客槽，不残留账号数据；登录时游客槽有非种子数据会弹出「并入/保留」认领，绝不静默串号上传。新增字段走 `mergeState`（settings 浅合并，数组以存储为准）；云端文档整份覆盖（`replace-state`），字段缺失有兜底。
 4. **seed 是真实数据**：12 家冲刺层公司、W1–W10、两个项目、24 个知识主题均来自策略文档，可自由增删改，但**已初始化过 localStorage 的用户不会自动拿到 seed 改动**（数组以存储为准）；如需推送新种子，需在 merge 逻辑或版本迁移上处理。
 5. **验证脚本是字符串检查**：`verify-ai.mjs` 依赖特定字符串（如 `attempt < 2`、`updateInterview(` 等），重构成其他写法会误报/漏报，改动后跑 `npm run verify` 确认（当前 36 项）。
 6. **dev 服务器在本沙箱内无法监听端口**（EACCES），冒烟测试只能在用户本机做；构建（tsc+vite）可在任意环境验证。
@@ -280,13 +313,13 @@ cd functions && npm install && cd ..   # 云函数依赖（仅 Blaze 备选方�
 
 ## 11. 路线图与下一步
 
-已交付：MVP 底座（8 页面+持久化）→ 数据导入导出 → AI 助手（问答/复盘/简历翻译/知识点生成）→ 高频面试题库自动汇总（`/question-bank`）→ 知识模块细化（主题下知识点项 + 展开学习 + 导出）→ Firebase 云端化（认证 + Firestore 跨设备同步 + AI Worker）→ **公网真实版**（2026 决策：公网 = 真实工具测评，真实数据 + 云同步 + 云端 AI，见 §13 / `docs/DEPLOY.md`）。
+已交付：MVP 底座（8 页面+持久化）→ 数据导入导出 → AI 助手（问答/复盘/简历翻译/知识点生成）→ 高频面试题库自动汇总（`/question-bank`）→ 知识模块细化（主题下知识点项 + 展开学习 + 导出）→ Firebase 云端化（认证 + Firestore 跨设备同步 + AI Worker）→ **公网真实版**（2026 决策：公网 = 真实工具测评，真实数据 + 云同步 + 云端 AI，见 §13 / `docs/DEPLOY.md`）→ **简历板块**（素材库 + 多版本标签页 + 行内编辑 + 版本定制 + 导出 PDF/MD/HTML/纯文本 + AI 经历改写，见 §6.1 / `docs/RESUME_FEATURE_DESIGN.md`）。
 
 待办（按价值排序）：
 
 - [x] **高频面试题库自动汇总**（已完成）：从 `InterviewLog.questions` 汇总去重，生成可背诵的题库文档（可导出 Markdown）；
-- [ ] 投递状态变化时间线：记录每次状态变更时间，统计各阶段耗时；
-- [ ] 简历版本管理：版本化保存简历要点与投递版本映射；
+- [x] **简历版本管理**（已完成，见 §6.1）：素材库 + 多岗位版本（量化/视觉）标签页切换、行内编辑、导出与 AI 改写；
+- [x] 投递状态变化时间线：statusHistory 随每次状态变更自动记录（网页端与 Edge 插件同规则），`/stats` 页做阶段耗时统计；
 - [ ] CSV 导入（从 Excel 批量录入投递）；
 - [ ] 设置页：startDate/投递目标/称呼 可视化配置（当前在 seed）；
 - [ ] 投递"下一步行动"提醒（nextAction + 日期）。
@@ -352,6 +385,7 @@ cd functions && npm install && cd ..   # 云函数依赖（仅 Blaze 备选方�
 - **登录监听**：`subscribeAuth`（onAuthStateChanged）→ 登出时清空远端引用，回到本地模式；
 - **快照订阅**：登录后 `onSnapshot(states/{uid})`，`snapshot.metadata.hasPendingWrites` 跳过自己刚写入的回显；远端无文档 → `cloudEmpty=true`（顶栏出现"上传本机数据"）；远端有文档 → `isAppState` 校验后 `replace-state` 整状态覆盖；
 - **防抖上传**：状态变化 600ms 后 `setDoc`（`merge:true` + serverTimestamp）；`lastRemoteJson` 记录已应用的远端 JSON，与当前状态一致时不写回，**避免同步死循环**；
+- **简历板块同模式**：`resumeStore` 独立持久化——localStorage 键 `jobhunt-ops-resume-v1` + Firestore 文档 `resumes/{uid}`（`firestore.rules` 已按 uid 放行）；订阅/防抖上传逻辑与 appStore 一致，互不干扰；
 - **离线**：IndexedDB 持久化（`persistentLocalCache` + 多标签页），断网照常用、恢复后自动补传；
 - **并发语义**：多设备最后写入者胜（serverTimestamp 排序），个人工具可接受；旧备份字段缺失由 `replace-state` 兜底（`questionBankMastered ?? []`）。
 

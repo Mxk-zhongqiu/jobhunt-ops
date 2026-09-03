@@ -43,14 +43,15 @@
 
 ## 2. 数据全景（字段字典）
 
-数据整体结构 = `AppState`（与 `/data` 页「导出完整备份」的 JSON 完全一致），本地持久化于
-localStorage 键 **`jobhunt-ops-state-v1`**；登录 Firebase 后同时写云端 Firestore `states/{uid}`（云端为真、本地为备份、双向同步）。
+数据整体结构 = `AppState`（与 `/data` 页「导出完整备份」的 JSON 完全一致）。本地持久化于
+localStorage：未登录用游客键 **`jobhunt-ops-state-v1`**，登录后按账号分区 **`jobhunt-ops-state-v1:<uid>`**（简历板块同理：`jobhunt-ops-resume-v1` / `...:<uid>`）；
+登录 Firebase 后同时写云端 Firestore `states/{uid}` / `resumes/{uid}`（云端为真、本地为备份）。**登出即切回游客槽**；登录时若检测到游客槽有未绑定数据会先询问「并入当前账号 / 保留在游客区」，不会静默上传。
 
 ### 2.1 七块数据一览
 
 | 集合 | 含义 | 主键 | 关键枚举 |
 |---|---|---|---|
-| `applications` | 投递记录 | `id` | tier / channel / status / positionKind |
+| `applications` | 投递记录 | `id` | tier / platform / status / positionKind |
 | `interviews` | 面试 / 笔试记录 | `id` | round（自由文本：笔试/一面/二面/终面/HR 面） |
 | `weeklyPlans` | 十周计划 | `week`(1–10) | tasks[].done |
 | `projects` | 量化项目 + 里程碑 | `id` | status / milestones[].status |
@@ -66,7 +67,7 @@ localStorage 键 **`jobhunt-ops-state-v1`**；登录 Firebase 后同时写云端
 | id | string | ✅ | 唯一；新记录 `app-<时间戳>`；种子为 `seed-app-公司` |
 | company | string | ✅ | 公司名（真实名称，勿用演示名） |
 | tier | enum | ✅ | `冲刺` / `主攻` / `保底` |
-| channel | enum | ✅ | `官网` / `牛客` / `应届生` / `学校就业网` / `内推` / `实习转正` / `其他` |
+| platform | enum | 否（可留空=未指定） | `Boss直聘` / `猎聘` / `官网` / `牛客` / `应届生` / `学校就业网` / `内推` / `实习转正` / `其他平台`；历史旧 `channel`（渠道）由应用自动迁移为 platform 并剔除 |
 | position | string | ✅ | 岗位名，如「量化研究员（2026 届）」 |
 | positionKind | enum | ✅ | `量化研究` / `量化开发` / `金融科技` / `数据分析` / `风控` / `其他` |
 | status | enum | ✅ | `计划投递` / `已投递` / `笔试` / `一面` / `二面` / `终面` / `Offer` / `已拒绝` / `放弃` |
@@ -75,6 +76,8 @@ localStorage 键 **`jobhunt-ops-state-v1`**；登录 Firebase 后同时写云端
 | url | string | 否 | 投递链接 |
 | note | string | 否 | 备注 |
 | nextAction | string | 否 | 下一步动作 |
+| jdSummary | string | 否 | JD 摘要（插件从招聘页采集，供打招呼/简历匹配分析） |
+| statusHistory | array | 否 | `[{ status, at }]` 状态时间线；每次状态变更由应用/插件自动追加（`/stats` 据此统计阶段耗时） |
 | createdAt | datetime | ✅ | ISO 8601（如 `2026-08-22T14:22:01.207Z`） |
 | updatedAt | datetime | ✅ | ISO 8601；应用每次修改自动刷新 |
 
@@ -188,13 +191,13 @@ localStorage 键 **`jobhunt-ops-state-v1`**；登录 Firebase 后同时写云端
 
 ### 4.1 投递 applications
 
-**新增一条投递**（必填：company / tier / channel / position / positionKind；status 默认 `计划投递`）：
+**新增一条投递**（必填：company / tier / position / positionKind；platform 可选、留空=未指定；status 默认 `计划投递`）：
 ```json
 {
   "id": "app-1724380000000",
   "company": "XX 量化",
   "tier": "主攻",
-  "channel": "官网",
+  "platform": "官网",
   "position": "量化研究员（2026 届）",
   "positionKind": "量化研究",
   "status": "计划投递",
@@ -336,7 +339,7 @@ node scripts/data/state-tools.mjs help            # 全部选项
 
 ```
 按 SOP 更新：
-- 新增投递：公司=XX量化，分层=主攻，渠道=官网，岗位=量化研究员（2026 届），岗位类型=量化研究，截止日=2026-09-15
+- 新增投递：公司=XX量化，分层=主攻，平台=官网，岗位=量化研究员（2026 届），岗位类型=量化研究，截止日=2026-09-15
 - 幻方 状态 → 笔试
 - 录入面经：公司=XX量化，轮次=一面，日期=2026-08-22，问题/复盘如下…
 - 项目1 f2 里程碑 → done

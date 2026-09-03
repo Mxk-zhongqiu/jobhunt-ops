@@ -32,6 +32,7 @@ function parsePayload(content: string, request: AIRequest): AIProposalPayload {
     review: "review",
     resume: "resume",
     knowledge: "knowledge",
+    rewrite: "rewrite",
   };
   if (value.kind !== expected[request.capability]) throw new Error("UNEXPECTED_DRAFT_TYPE");
 
@@ -76,6 +77,15 @@ function parsePayload(content: string, request: AIRequest): AIProposalPayload {
       kind: "knowledge",
       topicName: typeof value.topicName === "string" ? value.topicName.slice(0, 80) : "",
       points,
+    };
+  }
+  if (value.kind === "rewrite" && typeof value.original === "string" && typeof value.rewritten === "string") {
+    return {
+      kind: "rewrite",
+      style: typeof value.style === "string" ? value.style.slice(0, 40) : "",
+      original: value.original.slice(0, 3000),
+      rewritten: value.rewritten.slice(0, 4000),
+      notes: typeof value.notes === "string" ? value.notes.slice(0, 1000) : undefined,
     };
   }
   throw new Error("INVALID_PROVIDER_RESPONSE");
