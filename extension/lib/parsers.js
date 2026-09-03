@@ -78,9 +78,16 @@
     "立即沟通", "在线沟通", "投个简历", "收藏职位", "收藏", "职位标签",
   ];
 
-  /** 去除 JD 文本中的 UI 噪音词并规范化空白 */
+  /** 去除 JD 文本中的 UI 噪音词、合并“拆字反爬”产生的字间空格并规范化空白 */
   function cleanJdText(text) {
     let t = String(text || "");
+    t = norm(t);
+    // 反爬拆字：相邻中文字符间的单空格合并（“微 信 职 位 描述”→“微信职位描述”），循环到稳定
+    let previous = "";
+    while (t !== previous) {
+      previous = t;
+      t = t.replace(/([\u3400-\u9fff\u3040-\u30ff\uff00-\uffef])\s+([\u3400-\u9fff\u3040-\u30ff\uff00-\uffef])/g, "$1$2");
+    }
     for (const phrase of JD_NOISE_PHRASES) t = t.split(phrase).join(" ");
     return norm(t);
   }

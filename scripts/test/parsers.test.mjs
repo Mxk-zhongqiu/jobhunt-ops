@@ -102,6 +102,13 @@ test("splitJdKeywords: 拆出正文前关键词", () => {
   assert.ok(result.body.includes("你将负责推荐系统"));
 });
 
+test("cleanJdText: 合并拆字反爬产生的字间空格", () => {
+  const cleaned = JH.cleanJdText("微 信 职 位 描 述 ● 你将 有 机会 参与 到以下 工作中");
+  assert.ok(!cleaned.includes("微 信"));
+  assert.ok(!cleaned.includes("职 位"));
+  assert.ok(cleaned.includes("有机会参与到以下工作中") || cleaned.includes("你将有机会参与到以下工作中"));
+});
+
 test("splitJdKeywords: 无前置关键词时正文保持", () => {
   const sample = "● 你将有可能参与到以下工作中 1. 开发量化交易信号";
   const result = JH.splitJdKeywords(sample);

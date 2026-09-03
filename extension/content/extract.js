@@ -12,6 +12,59 @@
   // JD/详情类容器关键字（采集与探测共用）
   const JD_KEYWORDS = ["job-sec", "job-detail", "job-desc", "jobDesc", "job-intro", "description-text", "desc", "detail", "introduce"];
 
+  // 站内 JSON 接口旁听缓存（方案 A 探测版）：MAIN world 捕获后经 CustomEvent 转发到此（隔离世界）
+  const captureCache = new Map();
+  window.addEventListener("__jh_capture__", (event) => {
+    try {
+      const detail = event.detail;
+      if (!detail || !detail.url) return;
+      captureCache.set(detail.url, { raw: String(detail.raw || ""), at: Date.now() });
+      while (captureCache.size > 6) captureCache.delete(captureCache.keys().next().value);
+    } catch (_) {
+      /* 忽略 */
+    }
+  });
+  const JSON_KEY_HINT = /(jd|job)?desc|description|jd|skill|tag|label|position|content|detail|职位|描述|技能|标签|岗位/i;
+  function walkJsonFields(value, path, depth, out) {
+    if (depth > 4 || out.length >= 24) return;
+    if (value === null || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      for (const item of value) walkJsonFields(item, path, depth + 1, out);
+      return;
+    }
+    for (const key of Object.keys(value)) {
+      const item = value[key];
+      const childPath = path ? `${path}.${key}` : key;
+      if (typeof item === "string") {
+        if (item.length >= 20 && JSON_KEY_HINT.test(key)) {
+          out.push({ path: childPath, len: item.length, sample: item.slice(0, 80) });
+        }
+      } else if (typeof item === "number" && item > 0) {
+        if (JSON_KEY_HINT.test(key)) out.push({ path: childPath, len: String(item).length, sample: String(item) });
+      } else {
+        walkJsonFields(item, childPath, depth + 1, out);
+      }
+    }
+  }
+  function captureSummary() {
+    const endpoints = [];
+    for (const [url, entry] of captureCache) {
+      let fields = [];
+      let jdGuess = "";
+      try {
+        const json = JSON.parse(entry.raw.slice(0, 200000));
+        walkJsonFields(json, "", 0, fields);
+        const strong = fields.filter((item) => /desc|jd|描述|content/i.test(item.path));
+        strong.sort((a, b) => b.len - a.len);
+        jdGuess = strong.length ? strong[0].sample : "";
+      } catch (_) {
+        /* 忽略 */
+      }
+      endpoints.push({ url: url.slice(0, 200), chars: entry.raw.length, fields: fields.slice(0, 12), jdGuess });
+    }
+    return { captured: endpoints.length, endpoints };
+  }
+
   function platformByHost() {
     const host = location.hostname;
     if (host.includes("zhipin")) return "Boss直聘";
@@ -406,8 +459,8 @@
             if (skipFn(el)) return NodeFilter.FILTER_REJECT;
           }
           if (skipFn(root)) return NodeFilter.FILTER_REJECT;
-          const value = (node.nodeValue || "").trim();
-          if (value) parts.push(value);
+          const value = node.nodeValue;
+          if (value && value.trim()) parts.push(value);
           return NodeFilter.FILTER_ACCEPT;
         },
       });
@@ -417,7 +470,7 @@
     } catch (_) {
       /* 忽略 */
     }
-    return clean(parts.join(" "));
+    return clean(parts.join(""));
   }
 
   function runDomProbe(writeTest) {
@@ -497,6 +550,7 @@
       chatLike,
       inputs,
       writeTest: writeTestResult,
+      capture: captureSummary(),
     };
   }
 
