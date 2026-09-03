@@ -24,6 +24,15 @@
       /* 忽略 */
     }
   });
+  let mainCaptureState = null;
+  window.addEventListener("__jh_ready__", (event) => {
+    try {
+      const detail = event.detail;
+      if (detail && typeof detail === "object") mainCaptureState = detail;
+    } catch (_) {
+      /* 忽略 */
+    }
+  });
   const JSON_KEY_HINT = /(jd|job)?desc|description|jd|skill|tag|label|position|content|detail|职位|描述|技能|标签|岗位/i;
   function walkJsonFields(value, path, depth, out) {
     if (depth > 4 || out.length >= 24) return;
@@ -46,6 +55,29 @@
       }
     }
   }
+  function scanInlineEmbeds() {
+    const out = [];
+    const KEY_RE = /"([A-Za-z0-9_]*(?:[Jj]ob)?[Dd]esc[A-Za-z0-9_]*|jd_desc|jobDesc|jobDetail|job_description|description)"/g;
+    try {
+      for (const script of document.scripts) {
+        if (script.src) continue;
+        const text = script.textContent || "";
+        if (text.length < 1500) continue;
+        if (!/职位描述|岗位职责|任职要求|jobDesc|jdDesc|description|jobDetail/i.test(text)) continue;
+        const keys = [];
+        let match = KEY_RE.exec(text);
+        while (match) {
+          if (!keys.includes(match[1])) keys.push(match[1]);
+          match = KEY_RE.exec(text);
+        }
+        out.push({ kind: "inline", chars: text.length, keys: keys.slice(0, 8), hasChinese: /职位|描述|岗位/.test(text) });
+        if (out.length >= 4) break;
+      }
+    } catch (_) {
+      /* 忽略 */
+    }
+    return out;
+  }
   function captureSummary() {
     const endpoints = [];
     for (const [url, entry] of captureCache) {
@@ -62,7 +94,12 @@
       }
       endpoints.push({ url: url.slice(0, 200), chars: entry.raw.length, fields: fields.slice(0, 12), jdGuess });
     }
-    return { captured: endpoints.length, endpoints };
+    return {
+      captured: endpoints.length,
+      endpoints,
+      main: mainCaptureState ? { ready: true, stats: mainCaptureState.stats || {} } : { ready: false },
+      embeds: scanInlineEmbeds(),
+    };
   }
 
   function platformByHost() {
@@ -422,7 +459,7 @@
     const scored = candidates.filter((candidate) => candidate.score > 0);
     const pool = scored.length ? scored : candidates;
     if (!pool.length) return { el: null, len: 0, text: "" };
-    pool.sort((a, b) => (b.score - a.score) || (a.len - b.len));
+    pool.sort((a, b) => (b.score - a.score) || (b.len - a.len));
     return pool[0];
   }
 
