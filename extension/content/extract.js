@@ -172,15 +172,23 @@
       jdKeywords = keywordParts.join(" ");
       jdText = collectVisibleTextSkipping(area.el, skipNonBody);
       jdText = JH.cleanJdText ? JH.cleanJdText(jdText) : jdText;
+      // 正文末尾若夹带公司介绍（同容器内），在此截断
+      const companyIndex = jdText.indexOf("公司介绍");
+      if (companyIndex > 0) jdText = jdText.slice(0, companyIndex);
     } else {
       jdText = JH.cleanJdText ? JH.cleanJdText(area.text) : area.text;
     }
-    // 文本兜底：正文前若仍混有无标签关键词短语，再拆一次
-    if (!jdKeywords && JH.splitJdKeywords) {
-      const split = JH.splitJdKeywords(jdText);
-      if (split.keywords) {
-        jdKeywords = split.keywords;
-        jdText = split.body || jdText;
+    // 关键词兜底：容器内没有 → 页面级 chip 扫描 → 最后文本拆分
+    if (!jdKeywords) {
+      const pageKeywords = collectPageKeywords(jdText);
+      if (pageKeywords) {
+        jdKeywords = pageKeywords;
+      } else if (JH.splitJdKeywords) {
+        const split = JH.splitJdKeywords(jdText);
+        if (split.keywords) {
+          jdKeywords = split.keywords;
+          jdText = split.body || jdText;
+        }
       }
     }
     return {
@@ -303,11 +311,30 @@
     }
   }
 
-  // 正文可见性/采集：在疑似 JD/详情/描述的容器里挑“最像正文”的那个。
-  // 策略：优先「JD 专有类」候选，且在其文本 ≥250 的候选中取【最小者】——避免把侧栏/招聘者卡/整页大容器圈进来。
+  // 正文选择：候选元素里“最像 JD 正文”者。
+  // 排除公司介绍/侧栏类容器；按 JD 段落标记（职位描述/岗位职责/任职要求…）计分，公司话术（成立于/是一家…）扣分；
+  // 同分取文本更小的（更贴近正文而非整页）。文本量下限放宽到 150 字，避免过短 JD 被漏。
   const JD_AREA_SPECIFIC = [
     /job-sec/, /job-desc/, /jobDesc/, /jobDetail/, /job-detail/, /job-intro/, /jd-detail/, /description-text/, /desc-info/,
   ];
+  const JD_SECTION_HINTS = [
+    "职位描述", "岗位职责", "任职要求", "职位要求", "岗位要求", "工作职责", "工作内容",
+    "你要解决", "你将负责", "你将参与", "我们希望你是", "任职资格", "职责", "加分项",
+  ];
+  const JD_COMPANY_SIGNALS = [
+    "公司介绍", "公司简介", "是一家", "成立于", "我们相信", "投研团队", "创始人",
+    "使命", "愿景", "在招职位", "热招", "了解更多",
+  ];
+  function containerScore(text) {
+    let score = 0;
+    for (const hint of JD_SECTION_HINTS) if (text.includes(hint)) score += 2;
+    for (const signal of JD_COMPANY_SIGNALS) if (text.includes(signal)) score -= 3;
+    return score;
+  }
+  function isCompanySideContainer(node) {
+    const c = clsOf(node);
+    return /company|corp-info|introduce|company-intro|side|aside|banner/i.test(String(c));
+  }
   function clsOf(node) {
     const raw = node && node.className;
     return typeof raw === "string" ? raw : raw && raw.baseVal !== undefined ? raw.baseVal : "";
@@ -330,26 +357,43 @@
     }
   }
   function longestKeywordArea(keywords) {
-    const specific = [];
-    const broad = [];
+    const candidates = [];
     for (const el of document.querySelectorAll("div,section,article")) {
       const c = clsOf(el);
       if (!keywords.some((keyword) => c.includes(keyword))) continue;
+      if (isCompanySideContainer(el)) continue;
       const text = visibleText(el);
-      if (text.length < 250) continue;
-      const record = { el, len: text.length, text };
-      if (JD_AREA_SPECIFIC.some((rule) => rule.test(c))) specific.push(record);
-      else broad.push(record);
+      if (text.length < 150) continue;
+      candidates.push({ el, len: text.length, text, score: containerScore(text) });
     }
-    const pool = specific.length ? specific : broad;
+    const scored = candidates.filter((candidate) => candidate.score > 0);
+    const pool = scored.length ? scored : candidates;
     if (!pool.length) return { el: null, len: 0, text: "" };
-    pool.sort((a, b) => a.len - b.len);
+    pool.sort((a, b) => (b.score - a.score) || (a.len - b.len));
     return pool[0];
   }
 
   function longestKeywordText(keywords) {
     const area = longestKeywordArea(keywords);
     return { len: area.len, text: area.text };
+  }
+
+  // 页面级兜底：从整页收集可见技能标签（正文容器外也可能有 tag/chip），供关键词区使用
+  function collectPageKeywords(skipText) {
+    const seen = [];
+    const noise = /全职|实习|应届|经验|学历|本科|硕士|博士|校招|社招|关注|分享|收藏/i;
+    for (const node of document.querySelectorAll('span,a,em,i,div')) {
+      if (computedHidden(node)) continue;
+      if (isCompanySideContainer(node)) continue;
+      if (!isTagClass(node)) continue;
+      const text = clean(node.innerText || node.textContent || "");
+      if (text.length < 2 || text.length > 40) continue;
+      if (noise.test(text)) continue;
+      if (seen.includes(text)) continue;
+      seen.push(text);
+      if (seen.length >= 12) break;
+    }
+    return seen.join(" ");
   }
 
   // 活 DOM 上按“可见性”收集文本：跳过 style/script、隐藏/零字号反爬文本、tag 元素，避免克隆节点 innerText 退化带出 CSS 与隐藏内容
