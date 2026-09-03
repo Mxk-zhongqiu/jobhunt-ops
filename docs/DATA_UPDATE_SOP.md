@@ -6,7 +6,7 @@
 >
 > - 执行层工具：`scripts/data/state-tools.mjs`（npm 别名：`npm run state:*`）
 > - 规范状态文件：`.edge-profile/state.json`（真实数据，gitignored，不入库）
-> - 配套文档：`docs/PROJECT_HANDBOOK.md`（开发手册）、`docs/HANDOVER.md`（交接索引）
+> - 配套文档：`docs/PROJECT_HANDBOOK.md`（开发手册）；交接索引等个人文档已移出公开仓库（保留在本地 `.edge-profile/private-docs/`）
 > - 最后更新：2026-08-22
 
 ---
@@ -37,7 +37,7 @@
 ### 1.3 适用数据范围
 
 **本 SOP 覆盖全部 7 块应用数据**：投递、面试记录、周计划、项目里程碑、知识体系、设置、面试题库已掌握标记。
-> 不在范围内：代码、种子数据（`src/data/seed.ts`）、简历 / 小红书素材等文档资产（见 HANDOVER §4）。
+> 不在范围内：代码、种子数据（`src/data/seed.ts`）、简历 / 小红书素材等文档资产（见本地 HANDOVER §4，已移出公开仓库）。
 
 ---
 
@@ -349,6 +349,6 @@ node scripts/data/state-tools.mjs help            # 全部选项
 
 ## 附录 C：与现有文档的关系
 
-- `docs/HANDOVER.md` §4 文件索引：已加入本 SOP 入口
+- 本地交接文档 `HANDOVER.md` §4 文件索引：已加入本 SOP 入口（该文档已移出公开仓库）
 - `README.md`：数据管理一节已指向本 SOP
 - `docs/PROJECT_HANDBOOK.md` §8（数据管理）：与 `/data` 页机制一致，本 SOP 是其"操作化"标准

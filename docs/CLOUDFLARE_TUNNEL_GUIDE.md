@@ -1,8 +1,8 @@
 # Cloudflare Tunnel + Access 配置指南（AI Agent 远程模式）
 
-> 版本：v1.0（2026-08-21）· 配套：`docs/REMOTE_ACCESS_PLAN.md` §2.2（概述）→ 本文是**详细分步执行版**
+> 版本：v1.0（2026-08-21）· 配套：《远程访问计划》§2.2（概述，本地私有文档）→ 本文是**详细分步执行版**
 > 目标：把本机 DSH GUI（`http://127.0.0.1:3080`，无登录认证）安全暴露到公网，手机浏览器访问 `https://ai.<你的域名>` 即可给 AI 下指令干活
-> ⚠️ 安全前提（REMOTE_ACCESS_PLAN 红线）：**DSH GUI 绝不裸奔公网**——本文每一步都围绕"Tunnel 加密 + Access 身份认证"展开，两者缺一不可
+> ⚠️ 安全前提（远程访问计划红线）：**DSH GUI 绝不裸奔公网**——本文每一步都围绕"Tunnel 加密 + Access 身份认证"展开，两者缺一不可
 > ⏱ 预计耗时：30–45 分钟（需电脑 + 手机配合，可在 ToDesk 远程下分步做）
 
 ---
@@ -166,4 +166,4 @@ cloudflared service install
 - **Q：手机进 DSH GUI 卡？** 多为手机流量网络问题，页面是轻量的；也可在电脑端 ToDesk 确认 DSH 是否正常运行（`npm run ai:proxy` + DSH 服务）。
 - **Q：多个端口也要暴露？** 在 config.yml ingress 里加一条 `- hostname: xxx.<你的域名> / service: http://127.0.0.1:<端口>`，并在 Access 里给新子域加应用。
 
-*指南按 2026-08 Cloudflare 控制台路径编写，界面若改版以控制台实际为准；操作前提见 `docs/REMOTE_ACCESS_PLAN.md` §2.2。*
+*指南按 2026-08 Cloudflare 控制台路径编写，界面若改版以控制台实际为准；操作前提见《远程访问计划》§2.2（本地私有文档）。*
