@@ -15,7 +15,10 @@
   const STYLE = `
     :host { all: initial; }
     * { box-sizing: border-box; font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }
-    .jh-wrap { position: fixed; z-index: 2147483000; }
+    .jh-wrap {
+      position: fixed; z-index: 2147483000;
+      top: 90px; right: 16px; /* 兜底：显式 left/top 定位后 right 会被清除 */
+    }
     .jh-bubble {
       width: 58px; height: 58px; border-radius: 50%;
       background: #2f6bff; color: #fff; border: none; cursor: grab;
@@ -48,6 +51,7 @@
   `;
 
   let host = null; // 轻量 DOM 容器（light DOM），内含 shadow root
+  let wrapEl = null; // 真正的 position:fixed 元素（定位都作用在它上面）
   let shadow = null;
   let bubbleEl = null;
   let panelEl = null;
@@ -60,10 +64,11 @@
   }
 
   function currentMode() {
-    return host && !shadow.querySelector(".jh-panel").classList.contains("jh-hidden") ? "panel" : "bubble";
+    if (!panelEl) return "bubble";
+    return panelEl.classList.contains("jh-hidden") ? "bubble" : "panel";
   }
   function sizeFor(mode) {
-    return mode === "panel" ? { w: 408, h: 0 } : { w: 58, h: 58 };
+    return mode === "panel" ? 408 : 58;
   }
   function clampPos(left, top, w, h) {
     const vw = document.documentElement.clientWidth || window.innerWidth;
@@ -75,48 +80,48 @@
   }
 
   function applyPosition(pos) {
-    if (!host || !pos) return;
-    host.style.left = `${pos.left}px`;
-    host.style.top = `${pos.top}px`;
+    if (!wrapEl || !pos) return;
+    wrapEl.style.right = "auto";
+    wrapEl.style.left = `${pos.left}px`;
+    wrapEl.style.top = `${pos.top}px`;
   }
 
   async function persistPosition() {
-    if (!host) return;
-    const rect = host.getBoundingClientRect();
+    if (!wrapEl) return;
+    const rect = wrapEl.getBoundingClientRect();
     await writeKey(POS_KEY, { left: Math.round(rect.left), top: Math.round(rect.top) });
   }
 
   async function defaultPosition(mode) {
     const stored = await readKey(POS_KEY);
-    if (stored && typeof stored.left === "number" && typeof stored.top === "number") {
-      const size = sizeFor(mode);
-      return clampPos(stored.left, stored.top, size.w, mode === "panel" ? 560 : size.h);
-    }
+    const w = sizeFor(mode);
     const vw = document.documentElement.clientWidth || window.innerWidth;
-    if (mode === "panel") return clampPos(vw - 408 - 16, 72, 408, 560);
-    return clampPos(vw - 58 - 24, 120, 58, 58);
+    if (stored && typeof stored.left === "number" && typeof stored.top === "number") {
+      return clampPos(stored.left, stored.top, w, mode === "panel" ? 560 : 58);
+    }
+    if (mode === "panel") return clampPos(vw - w - 16, 72, w, 560);
+    return clampPos(vw - w - 24, 120, w, 58);
+  }
+
+  async function repositionFor(mode) {
+    if (!wrapEl) return;
+    const pos = await defaultPosition(mode);
+    const w = sizeFor(mode);
+    const h = mode === "panel" ? Math.max(200, Math.min(560, wrapEl.getBoundingClientRect().height || 560)) : 58;
+    applyPosition(clampPos(pos.left, pos.top, w, h));
   }
 
   function showBubble() {
     if (!host) return;
-    shadow.querySelector(".jh-panel").classList.add("jh-hidden");
-    shadow.querySelector(".jh-bubble").classList.remove("jh-hidden");
+    bubbleEl.classList.remove("jh-hidden");
+    panelEl.classList.add("jh-hidden");
     repositionFor("bubble");
   }
   function showPanel() {
     if (!host) return;
-    shadow.querySelector(".jh-bubble").classList.add("jh-hidden");
-    shadow.querySelector(".jh-panel").classList.remove("jh-hidden");
+    bubbleEl.classList.add("jh-hidden");
+    panelEl.classList.remove("jh-hidden");
     repositionFor("panel");
-  }
-
-  async function repositionFor(mode) {
-    const pos = await defaultPosition(mode);
-    applyPosition(pos);
-    // 面板首次展开/切换后夹紧一次（尺寸变化可能越界）
-    const w = mode === "panel" ? 408 : 58;
-    const h = mode === "panel" ? Math.min(560, host.getBoundingClientRect().height || 560) : 58;
-    applyPosition(clampPos(parseFloat(host.style.left) || pos.left, parseFloat(host.style.top) || pos.top, w, h));
   }
 
   function attachDrag(handle) {
@@ -126,18 +131,16 @@
       handle.setPointerCapture?.(event.pointerId);
       const startX = event.clientX;
       const startY = event.clientY;
-      const originLeft = host.offsetLeft;
-      const originTop = host.offsetTop;
+      const rect = wrapEl.getBoundingClientRect();
+      const originLeft = rect.left;
+      const originTop = rect.top;
       let moved = false;
       const onMove = (moveEvent) => {
-        const left = originLeft + moveEvent.clientX - startX;
-        const top = originTop + moveEvent.clientY - startY;
         const mode = currentMode();
-        const size = sizeFor(mode);
-        const h = mode === "panel" ? Math.max(200, host.getBoundingClientRect().height || 540) : size.h;
-        const clamped = clampPos(left, top, size.w, h);
-        host.style.left = `${clamped.left}px`;
-        host.style.top = `${clamped.top}px`;
+        const w = sizeFor(mode);
+        const h = mode === "panel" ? Math.max(200, wrapEl.getBoundingClientRect().height || 560) : 58;
+        const clamped = clampPos(originLeft + moveEvent.clientX - startX, originTop + moveEvent.clientY - startY, w, h);
+        applyPosition(clamped);
         moved = true;
       };
       const onUp = () => {
@@ -155,6 +158,7 @@
   async function destroy() {
     if (host && host.parentNode) host.parentNode.removeChild(host);
     host = null;
+    wrapEl = null;
     shadow = null;
     bubbleEl = null;
     panelEl = null;
@@ -172,6 +176,7 @@
     styleEl.textContent = STYLE;
     const wrap = document.createElement("div");
     wrap.className = "jh-wrap";
+    wrapEl = wrap;
 
     bubbleEl = document.createElement("button");
     bubbleEl.type = "button";
