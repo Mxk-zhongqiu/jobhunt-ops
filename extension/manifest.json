@@ -11,6 +11,12 @@
     "https://identitytoolkit.googleapis.com/*",
     "https://securetoken.googleapis.com/*"
   ],
+  "web_accessible_resources": [
+    {
+      "resources": ["popup.html"],
+      "matches": ["https://*.zhipin.com/*", "https://*.liepin.com/*"]
+    }
+  ],
   "background": {
     "service_worker": "background.js"
   },
@@ -21,7 +27,7 @@
   "content_scripts": [
     {
       "matches": ["https://*.zhipin.com/*", "https://*.liepin.com/*"],
-      "js": ["lib/parsers.js", "content/extract.js"],
+      "js": ["lib/parsers.js", "content/extract.js", "content/widget.js"],
       "run_at": "document_idle"
     }
   ]

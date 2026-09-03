@@ -54,6 +54,7 @@ const elements = {
   aiNote: $("aiNote"),
   aiDraftList: $("aiDraftList"),
   result: $("result"),
+  dockBtn: $("dockBtn"),
 };
 
 // ─── 基础 ───
@@ -528,6 +529,44 @@ async function aiFillIntoPage(text) {
   }
 }
 
+// ─── 常驻悬浮面板开关 ───
+
+function applyDockState(enabled) {
+  elements.dockBtn.dataset.enabled = enabled ? "1" : "0";
+  elements.dockBtn.textContent = enabled ? "已常驻 · 点此取消" : "常驻本页";
+}
+
+async function initDockBtn() {
+  // 常驻面板 iframe 内不显示该按钮
+  if (window.parent !== window) return;
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab || !tab.id) return;
+  try {
+    const res = await chrome.tabs.sendMessage(tab.id, { type: "jobhunt-widget-state" });
+    if (!res || !res.ok) throw new Error("no widget host");
+    applyDockState(Boolean(res.enabled));
+    elements.dockBtn.hidden = false;
+    elements.dockBtn.addEventListener("click", async () => {
+      const wasEnabled = elements.dockBtn.dataset.enabled === "1";
+      elements.dockBtn.disabled = true;
+      try {
+        const out = await chrome.tabs.sendMessage(tab.id, {
+          type: wasEnabled ? "jobhunt-widget-disable" : "jobhunt-widget-enable",
+        });
+        if (out && out.ok) {
+          applyDockState(!wasEnabled);
+          if (!wasEnabled) window.close(); // 已接管为常驻面板，关闭弹窗
+        }
+      } catch (_) {
+        showResult("err", "当前页面不支持常驻（需 BOSS直聘/猎聘 页面）");
+      }
+      elements.dockBtn.disabled = false;
+    });
+  } catch (_) {
+    elements.dockBtn.hidden = true; // 非支持页面或未注入
+  }
+}
+
 // ─── 事件绑定与初始化 ───
 
 function init() {
@@ -551,6 +590,7 @@ function init() {
     elements.jdChars.textContent = String(elements.fJd.value.length);
   });
   refreshSessionUi();
+  initDockBtn();
 }
 
 document.addEventListener("DOMContentLoaded", init);

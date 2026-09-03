@@ -27,6 +27,8 @@ body {
   background: var(--card);
   border-bottom: 1px solid var(--line);
 }
+.header-actions { display: flex; align-items: center; gap: 8px; }
+.dock-btn { white-space: nowrap; }
 .app-header strong { display: block; font-size: 14px; }
 .app-header span { color: var(--muted); font-size: 11px; }
 .chip { font-size: 11px; padding: 2px 8px; border-radius: 999px; }
