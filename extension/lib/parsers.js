@@ -72,6 +72,42 @@
     return /发简历|换电话|换微信|按Enter|微信扫码|安全验证|访问频繁|人机验证|请完成验证|你已屏蔽|对方已屏蔽/i.test(String(text || ""));
   }
 
+  // ── JD 文本清洗：去除 UI 噪音词（扫码分享/举报/职位描述 等），并把正文前的独立关键词短语拆出 ──
+  const JD_NOISE_PHRASES = [
+    "微信扫码分享", "扫码分享", "微信扫码", "分享到微信", "举报", "职位描述", "职位信息",
+    "立即沟通", "在线沟通", "投个简历", "收藏职位", "收藏", "职位标签",
+  ];
+
+  /** 去除 JD 文本中的 UI 噪音词并规范化空白 */
+  function cleanJdText(text) {
+    let t = String(text || "");
+    for (const phrase of JD_NOISE_PHRASES) t = t.split(phrase).join(" ");
+    return norm(t);
+  }
+
+  const JD_BODY_START =
+    /^[●]|^\d+[.、．)]|^(我们|你将|你会|岗位职责|任职要求|工作职责|职责描述|职位要求|加入我们|期待你的加入|希望你是|任职资格|职责)/;
+
+  /** 文本兜底：把正文前的独立关键词短语（无标签 DOM 时）与正文拆开 */
+  function splitJdKeywords(text) {
+    const cleaned = cleanJdText(text);
+    if (!cleaned) return { keywords: "", body: "" };
+    const tokens = cleaned.split(/\s+/).filter(Boolean);
+    const keywords = [];
+    let index = 0;
+    while (index < tokens.length) {
+      const token = tokens[index];
+      if (JD_BODY_START.test(token)) break;
+      if (token.length > 6 && /[，。；：、,.]/.test(token)) break;
+      keywords.push(token);
+      index += 1;
+    }
+    return {
+      keywords: keywords.slice(0, 60).join(" ").slice(0, 800),
+      body: tokens.slice(index).join(" "),
+    };
+  }
+
   /** 版本推荐：职位/JD 文本 vs 版本 targetRole+positions 的关键词包含评分 */
   function suggestVersion(jobText, versions) {
     const hay = norm(String(jobText || ""));
@@ -152,6 +188,8 @@
     parseTitleJob,
     classifyPage,
     isToolbarText,
+    cleanJdText,
+    splitJdKeywords,
     suggestVersion,
     buildVersionDigest,
     isMaskedCompany,

@@ -84,3 +84,27 @@ test("norm/cut: 工具函数", () => {
   assert.equal(JH.norm("  a   b\n c "), "a b c");
   assert.equal(JH.cut("123456", 3), "123");
 });
+
+test("cleanJdText: 去除 UI 噪音词", () => {
+  const cleaned = JH.cleanJdText("微信扫码分享 举报 职位描述 1. 负责量化策略 职位描述 2. 任职要求");
+  assert.ok(!cleaned.includes("微信扫码分享"));
+  assert.ok(!cleaned.includes("举报"));
+  assert.ok(!cleaned.includes("职位描述"));
+  assert.ok(cleaned.includes("1. 负责量化策略"));
+});
+
+test("splitJdKeywords: 拆出正文前关键词", () => {
+  const sample = "Golang 搜索/信息检索算法经验 TensorFlow/PyTorch Hadoop/Hive/Spark 计算机相关专业 推荐算法经验 ● 你将负责推荐系统的召回与排序";
+  const result = JH.splitJdKeywords(sample);
+  assert.ok(result.keywords.includes("Golang"));
+  assert.ok(result.keywords.includes("推荐算法经验"));
+  assert.ok(!result.body.includes("Golang"));
+  assert.ok(result.body.includes("你将负责推荐系统"));
+});
+
+test("splitJdKeywords: 无前置关键词时正文保持", () => {
+  const sample = "● 你将有可能参与到以下工作中 1. 开发量化交易信号";
+  const result = JH.splitJdKeywords(sample);
+  assert.equal(result.keywords, "");
+  assert.equal(result.body, sample);
+});

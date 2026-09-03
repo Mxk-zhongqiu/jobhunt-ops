@@ -140,21 +140,51 @@
     return last;
   }
 
-  // job_detail 页：岗位/公司（公司以标题为准，防 DOM 脱敏「某基金公司」）+ JD 全文采集
+  // job_detail 页：岗位/公司（公司以标题为准，防 DOM 脱敏「某基金公司」）+ JD 正文/关键词分离采集
   function captureJobDetail() {
     const JH = globalThis.JH || {};
     const parsed = JH.parseTitleJob ? JH.parseTitleJob(document.title) : { position: "", company: "" };
     const dom = fromDom();
     const domCompany = dom.company && (!JH.isMaskedCompany || !JH.isMaskedCompany(dom.company)) ? dom.company : "";
-    const jdText = longestKeywordText(JD_KEYWORDS).text;
     const position = clean(parsed.position || dom.position);
     const company = clean(parsed.company || domCompany);
     const cutText = (value, max) => (JH.cut ? JH.cut(value, max) : String(value || "").slice(0, max));
+
+    // 正文与关键词分离：关键词通常以 tag/chip 元素渲染在正文前
+    const area = longestKeywordArea(JD_KEYWORDS);
+    let jdText = "";
+    let jdKeywords = "";
+    if (area.el) {
+      const tags = [...area.el.querySelectorAll("span,div,em,i,a")].filter(isTagClass);
+      const keywordParts = [];
+      for (const node of tags) {
+        const text = clean(node.innerText || node.textContent || "");
+        if (text && text.length <= 40 && !keywordParts.includes(text)) keywordParts.push(text);
+      }
+      jdKeywords = keywordParts.join(" ");
+      const clone = area.el.cloneNode(true);
+      for (const node of [...clone.querySelectorAll("*")]) {
+        if (isTagClass(node) && node.parentNode) node.parentNode.removeChild(node);
+      }
+      const raw = clean(clone.innerText || clone.textContent || "");
+      jdText = JH.cleanJdText ? JH.cleanJdText(raw) : raw;
+    } else {
+      jdText = JH.cleanJdText ? JH.cleanJdText(area.text) : area.text;
+    }
+    // 文本兜底：若正文前仍混有无标签关键词短语，再拆一次
+    if (!jdKeywords && JH.splitJdKeywords) {
+      const split = JH.splitJdKeywords(jdText);
+      if (split.keywords) {
+        jdKeywords = split.keywords;
+        jdText = split.body || jdText;
+      }
+    }
     return {
       position: cutText(position, 80),
       company: cutText(company, 40),
       companyFromTitle: cutText(parsed.company || "", 40),
-      jdText: cutText(jdText, 1500),
+      jdText: cutText(jdText, 3000),
+      jdKeywords: cutText(jdKeywords, 800),
     };
   }
 
@@ -175,14 +205,14 @@
       company: "",
       jd: "",
       from: "none",
-      capture: { position: "", company: "", companyFromTitle: "", jdText: "" },
+      capture: { position: "", company: "", companyFromTitle: "", jdText: "", jdKeywords: "" },
       message: { text: "", source: "none" },
     };
     if (pageType === "job_detail") {
       result.capture = captureJobDetail();
       result.position = result.capture.position;
       result.company = result.capture.company;
-      result.jd = result.capture.jdText.slice(0, 500);
+      result.jd = result.capture.jdText;
       result.from = result.capture.position || result.capture.jdText ? "typed" : "none";
       return result;
     }
@@ -202,14 +232,14 @@
     if (ld && (ld.position || ld.company || ld.jd)) {
       result.position = clean(ld.position);
       result.company = clean(ld.company);
-      result.jd = clean(ld.jd).slice(0, 500);
+      result.jd = clean(ld.jd).slice(0, 3000);
       result.from = "jsonld";
       return result;
     }
     const domCompany = dom.company && (!JH.isMaskedCompany || !JH.isMaskedCompany(dom.company)) ? dom.company : "";
     result.position = clean(dom.position || parsed.position);
     result.company = clean(parsed.company || domCompany);
-    result.jd = clean(dom.jd).slice(0, 500);
+    result.jd = clean(dom.jd).slice(0, 3000);
     result.from = result.company || result.position ? "dom" : "none";
     return result;
   }
@@ -269,18 +299,31 @@
     }
   }
 
-  // 正文可见性/采集：在疑似 JD/详情/描述的容器里找文本最长者（返回全文，采集与探测共用）
-  function longestKeywordText(keywords) {
-    let best = { len: 0, text: "" };
+  // 正文可见性/采集：在疑似 JD/详情/描述的容器里找文本最长者（返回元素与全文，采集与探测共用）
+  function longestKeywordArea(keywords) {
+    let best = { el: null, len: 0, text: "" };
     const all = document.querySelectorAll("div,section,article");
     for (const el of all) {
       const raw = el.className;
       const cls = typeof raw === "string" ? raw : raw && raw.baseVal !== undefined ? raw.baseVal : "";
       if (!keywords.some((keyword) => cls.includes(keyword))) continue;
       const text = visibleText(el);
-      if (text.length > best.len) best = { len: text.length, text };
+      if (text.length > best.len) best = { el, len: text.length, text };
     }
     return best;
+  }
+
+  function longestKeywordText(keywords) {
+    const area = longestKeywordArea(keywords);
+    return { len: area.len, text: area.text };
+  }
+
+  /** 是否为“技能标签/关键词 chip”类元素（JD 正文前的独立关键词） */
+  function isTagClass(node) {
+    const raw = node && node.className;
+    const cls = typeof raw === "string" ? raw : raw && raw.baseVal !== undefined ? raw.baseVal : "";
+    if (!cls || String(cls).length > 60) return false;
+    return /tag|chip|keyword|tags/i.test(String(cls));
   }
 
   function runDomProbe(writeTest) {

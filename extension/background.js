@@ -360,14 +360,15 @@ async function aiGenerate(payload) {
   const jd = {
     position: cutS(payload.jd && payload.jd.position, 80),
     company: cutS(payload.jd && payload.jd.company, 40),
-    jdText: cutS(payload.jd && payload.jd.jdText, 1500),
+    jdText: cutS(payload.jd && payload.jd.jdText, 3000),
+    keywords: cutS(payload.jd && payload.jd.keywords, 800),
   };
   const hrMessage = cutS(payload.hrMessage, 800);
   const tone = payload.tone || "quant";
 
   const userInstruction =
     mode === "greeting"
-      ? `${jd.jdText ? `目标 JD：${jd.jdText}` : `目标岗位：${jd.position}${jd.company ? `（${jd.company}）` : ""}`}。结合上面的简历摘要，生成 3 版向招聘方打招呼的开场语。`
+      ? `${jd.jdText ? `目标 JD：${jd.jdText}` : `目标岗位：${jd.position}${jd.company ? `（${jd.company}）` : ""}`}${jd.keywords ? `\nJD 关键词：${jd.keywords}` : ""}。结合上面的简历摘要，生成 3 版向招聘方打招呼的开场语（可呼应 JD 关键词）。`
       : `${hrMessage ? `HR 最新消息：${hrMessage}` : "（未提供 HR 消息文本）"}。结合简历摘要，生成 3 版得体回复（可先判断 HR 意图，再给出下一步）。`;
 
   const body = {
@@ -403,7 +404,7 @@ function buildNewApplication(input) {
     appliedAt: status === "已投递" ? todayStr() : undefined,
     deadline: input.deadline || undefined,
     url: (input.url || "").trim() || undefined,
-    jdSummary: (input.jdSummary || "").trim().slice(0, 500) || undefined,
+    jdSummary: (input.jdSummary || "").trim().slice(0, 3000) || undefined,
     createdAt: now,
     updatedAt: now,
     statusHistory: [{ status, at: now }],

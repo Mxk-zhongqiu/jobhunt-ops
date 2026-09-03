@@ -63,8 +63,8 @@
             <select id="fStatus"></select>
           </label>
         </div>
-        <label>JD 摘要（可选，<span id="jdChars">0</span>/500）
-          <textarea id="fJd" rows="3" maxlength="500"></textarea>
+        <label>JD 描述（可选，<span id="jdChars">0</span>/3000）
+          <textarea id="fJd" rows="4" maxlength="3000"></textarea>
         </label>
         <div class="grid2">
           <label>截止日
@@ -143,8 +143,11 @@
           <select id="aiVersion"><option value="">（点击「从当前页抓取」或登录后加载）</option></select>
         </label>
         <div id="aiJdBlock">
-          <label>JD 摘要（自动抓取，可改）
-            <textarea id="aiJd" rows="4" maxlength="1500" placeholder="job_detail 页会自动抓取 JD 全文"></textarea>
+          <label>JD 关键词（自动提取，可改）
+            <textarea id="aiKeywords" rows="2" maxlength="800" placeholder="Golang / 推荐算法 / 机器学习…（不混入 JD 描述）"></textarea>
+          </label>
+          <label>JD 描述（自动抓取，已滤无关词，可改）
+            <textarea id="aiJd" rows="5" maxlength="3000" placeholder="job_detail 页会自动抓取 JD 正文"></textarea>
           </label>
         </div>
         <div id="aiHrBlock" hidden>

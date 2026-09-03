@@ -48,6 +48,7 @@ const elements = {
   aiVersion: $("aiVersion"),
   aiJdBlock: $("aiJdBlock"),
   aiJd: $("aiJd"),
+  aiKeywords: $("aiKeywords"),
   aiHrBlock: $("aiHrBlock"),
   aiHr: $("aiHr"),
   aiGenBtn: $("aiGenBtn"),
@@ -219,7 +220,7 @@ async function handleExtract() {
     if (data.platform && PLATFORMS.includes(data.platform)) elements.fPlatform.value = data.platform;
     if (data.url) elements.fUrl.value = data.url;
     if (data.jd) {
-      elements.fJd.value = data.jd.slice(0, 500);
+      elements.fJd.value = data.jd;
       elements.jdChars.textContent = String(elements.fJd.value.length);
     }
     showResult(found ? "ok" : "err", found ? "已从当前页提取，请核对后再保存。" : "未能从当前页识别岗位信息（仅支持 Boss直聘 / 猎聘 页面），请手动填写后保存。");
@@ -405,6 +406,7 @@ async function aiExtractForDrafts() {
     if (position) elements.aiPosition.value = position;
     if (capture.company) elements.aiCompany.value = capture.company;
     if (d.pageType === "job_detail" && capture.jdText) elements.aiJd.value = capture.jdText;
+    if (d.pageType === "job_detail" && capture.jdKeywords) elements.aiKeywords.value = capture.jdKeywords;
     if (d.pageType === "chat" && d.message && d.message.text && !elements.aiHr.value.trim()) {
       elements.aiHr.value = d.message.text;
     }
@@ -433,6 +435,7 @@ async function aiGenerateDrafts() {
   const position = elements.aiPosition.value.trim();
   const company = elements.aiCompany.value.trim();
   const jdText = elements.aiJd.value.trim();
+  const jdKeywords = elements.aiKeywords.value.trim();
   const hrMessage = elements.aiHr.value.trim();
   if (mode === "greeting" && !position && !jdText) {
     showResult("err", "打招呼需要岗位或 JD（点「从当前页抓取」或手填）");
@@ -447,7 +450,7 @@ async function aiGenerateDrafts() {
   showAiNote("正在生成 3 版草稿（约 5–15 秒）…");
   const res = await callBackground("aiGenerate", {
     mode,
-    jd: { position, company, jdText },
+    jd: { position, company, jdText, keywords: jdKeywords },
     hrMessage,
     versionId: elements.aiVersion.value || undefined,
     tone: elements.aiTone.value,
