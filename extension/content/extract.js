@@ -262,21 +262,16 @@
       jdKeywords = keywordParts.join(" ");
       jdText = collectVisibleTextSkipping(area.el, skipNonBody);
       jdText = JH.cleanJdText ? JH.cleanJdText(jdText) : jdText;
-      // 正文尾部的非正文区块（公司介绍/招聘者/安全提示等）统一截断（需出现在较后位置，防误伤开头）
-      let cutIndex = -1;
-      for (const marker of JD_TAIL_CUT_MARKERS) {
-        const index = jdText.indexOf(marker);
-        if (index > 200 && (cutIndex < 0 || index < cutIndex)) cutIndex = index;
-      }
+      const cutIndex = tailCutIndex(jdText);
       if (cutIndex > 0) jdText = jdText.slice(0, cutIndex);
     } else {
       jdText = JH.cleanJdText ? JH.cleanJdText(area.text) : area.text;
     }
     // 关键词兜底：容器内没有 → 页面级 chip 扫描 → 最后文本拆分
     if (!jdKeywords) {
-      const pageKeywords = collectPageKeywords(jdText);
-      if (pageKeywords) {
-        jdKeywords = pageKeywords;
+      const chipKeywords = collectChipKeywords(area.el);
+      if (chipKeywords) {
+        jdKeywords = chipKeywords;
       } else if (JH.splitJdKeywords) {
         const split = JH.splitJdKeywords(jdText);
         if (split.keywords) {
@@ -407,6 +402,19 @@
 
   // JD 正文后常见“非正文”区块标记：正文在此截断（保证不混入公司介绍/招聘者卡）
   const JD_TAIL_CUT_MARKERS = ["竞争力分析", "BOSS 安全提示", "安全提示", "在招职位", "公司介绍", "公司简介", "更多职位"];
+  // 招聘者卡片（“王女士 今日活跃 / 刚刚活跃 / 在线”等）
+  const JD_TAIL_HR_PATTERN = /[\u4e00-\u9fa5A-Za-z·]{2,6}(?:先生|女士|小姐)?\s*(?:今日活跃|刚刚活跃|今日在线|现在活跃)/;
+  /** 返回 JD 正文应截断的位置（首个出现在 200 字之后的非正文标记/招聘者卡片），无则 -1 */
+  function tailCutIndex(text) {
+    let cutIndex = -1;
+    for (const marker of JD_TAIL_CUT_MARKERS) {
+      const index = text.indexOf(marker);
+      if (index > 200 && (cutIndex < 0 || index < cutIndex)) cutIndex = index;
+    }
+    const hrMatch = JD_TAIL_HR_PATTERN.exec(text);
+    if (hrMatch && hrMatch.index > 200 && (cutIndex < 0 || hrMatch.index < cutIndex)) cutIndex = hrMatch.index;
+    return cutIndex;
+  }
   const JD_AREA_SPECIFIC = [
     /job-sec/, /job-desc/, /jobDesc/, /jobDetail/, /job-detail/, /job-intro/, /jd-detail/, /description-text/, /desc-info/,
   ];
@@ -468,20 +476,42 @@
     return { len: area.len, text: area.text };
   }
 
-  // 页面级兜底：从整页收集可见技能标签（正文容器外也可能有 tag/chip），供关键词区使用
-  function collectPageKeywords(skipText) {
+  // 关键词收集：优先正文容器内的显式 tag/chip 类；其次全页可见的“岗位头部/上方”短词 chip。
+  // 噪音过滤覆盖动作词（沟通/发消息/关注/投递…），避免把 UI 按钮当关键词。
+  const KEYWORD_ACTION_NOISE = /全职|实习|应届|经验|学历|本科|硕士|博士|校招|社招|关注|分享|收藏|沟通|发消息|聊一聊|在线沟通|立即沟通|投递|私信|简历|电话|职位描述|举报|微信扫码/i;
+  function collectChipKeywords(areaEl) {
     const seen = [];
-    const noise = /全职|实习|应届|经验|学历|本科|硕士|博士|校招|社招|关注|分享|收藏/i;
-    for (const node of document.querySelectorAll('span,a,em,i,div')) {
-      if (computedHidden(node)) continue;
-      if (isCompanySideContainer(node)) continue;
-      if (!isTagClass(node)) continue;
+    let areaTop = null;
+    try {
+      const rect = areaEl && areaEl.getBoundingClientRect();
+      if (rect && rect.height > 0) areaTop = rect.top;
+    } catch (_) {
+      /* 忽略 */
+    }
+    const consider = (node, allowAnywhere) => {
+      if (seen.length >= 14) return;
+      if (computedHidden(node)) return;
+      if (isCompanySideContainer(node)) return;
+      if (!allowAnywhere && !isTagClass(node)) return;
       const text = clean(node.innerText || node.textContent || "");
-      if (text.length < 2 || text.length > 40) continue;
-      if (noise.test(text)) continue;
-      if (seen.includes(text)) continue;
+      if (text.length < 2 || text.length > 24) return;
+      if (KEYWORD_ACTION_NOISE.test(text)) return;
+      if (seen.includes(text)) return;
       seen.push(text);
-      if (seen.length >= 12) break;
+    };
+    for (const node of document.querySelectorAll("span,a,em,i,div")) {
+      if (isTagClass(node)) {
+        consider(node, true);
+        continue;
+      }
+      if (areaTop === null) continue;
+      try {
+        const rect = node.getBoundingClientRect();
+        const top = rect.top;
+        if (top >= 0 && top < areaTop - 2 && node.textContent && clean(node.textContent).length <= 24) consider(node, false);
+      } catch (_) {
+        /* 忽略 */
+      }
     }
     return seen.join(" ");
   }
