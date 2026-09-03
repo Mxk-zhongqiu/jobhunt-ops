@@ -260,8 +260,43 @@
         if (text && text.length <= 40 && !keywordParts.includes(text)) keywordParts.push(text);
       }
       jdKeywords = keywordParts.join(" ");
-      jdText = collectVisibleTextSkipping(area.el, skipNonBody);
-      jdText = JH.cleanJdText ? JH.cleanJdText(jdText) : jdText;
+      const rawBody = collectVisibleTextSkipping(area.el, skipNonBody);
+      // 关键词锚点：只取「职位描述」标题之后、正文首个标记（●/1./你将/我们希望你是…）之前的短语
+      const anchor = "职位描述";
+      const anchorIdx = rawBody.indexOf(anchor);
+      let anchorKeywords = [];
+      let bodyText = rawBody;
+      if (anchorIdx >= 0) {
+        const segment = rawBody.slice(anchorIdx + anchor.length);
+        const bodyMatch = /(●|1[.、．]|你将|我们会|我们希望你是|岗位职责|任职要求|职位要求)/.exec(segment);
+        const segmentEnd = bodyMatch ? bodyMatch.index : segment.length;
+        const rawKeywords = segment.slice(0, segmentEnd);
+        const tokens = rawKeywords.split(/\s+/).filter(Boolean);
+        for (const token of tokens) {
+          const t = token.trim();
+          if (!t || t.length > 40) continue;
+          if (KEYWORD_ACTION_NOISE.test(t)) continue;
+          if (/^\d+$/.test(t)) continue;
+          if (!anchorKeywords.includes(t)) anchorKeywords.push(t);
+          if (anchorKeywords.length >= 10) break;
+        }
+        if (bodyMatch) {
+          // 正文从首个标记处开始（保留 ● 等标记）
+          bodyText = rawBody.slice(anchorIdx + anchor.length + bodyMatch.index);
+        } else if (anchorKeywords.length) {
+          bodyText = rawBody.slice(anchorIdx + anchor.length + rawKeywords.length);
+        } else {
+          // 标题后无关键词也无标记：正文视为标题之后的全部，不丢内容
+          bodyText = rawBody.slice(anchorIdx + anchor.length);
+        }
+      }
+      // 合并：正文容器内显式 tag 元素 + 「职位描述」后的关键词短语（去重）
+      const merged = [];
+      for (const keyword of [...keywordParts, ...anchorKeywords]) {
+        if (!merged.includes(keyword)) merged.push(keyword);
+      }
+      jdKeywords = merged.join(" ");
+      jdText = JH.cleanJdText ? JH.cleanJdText(bodyText) : bodyText;
       const cutIndex = tailCutIndex(jdText);
       if (cutIndex > 0) jdText = jdText.slice(0, cutIndex);
     } else {
