@@ -262,9 +262,13 @@
       jdKeywords = keywordParts.join(" ");
       jdText = collectVisibleTextSkipping(area.el, skipNonBody);
       jdText = JH.cleanJdText ? JH.cleanJdText(jdText) : jdText;
-      // 正文末尾若夹带公司介绍（同容器内），在此截断
-      const companyIndex = jdText.indexOf("公司介绍");
-      if (companyIndex > 0) jdText = jdText.slice(0, companyIndex);
+      // 正文尾部的非正文区块（公司介绍/招聘者/安全提示等）统一截断（需出现在较后位置，防误伤开头）
+      let cutIndex = -1;
+      for (const marker of JD_TAIL_CUT_MARKERS) {
+        const index = jdText.indexOf(marker);
+        if (index > 200 && (cutIndex < 0 || index < cutIndex)) cutIndex = index;
+      }
+      if (cutIndex > 0) jdText = jdText.slice(0, cutIndex);
     } else {
       jdText = JH.cleanJdText ? JH.cleanJdText(area.text) : area.text;
     }
@@ -401,9 +405,8 @@
     }
   }
 
-  // 正文选择：候选元素里“最像 JD 正文”者。
-  // 排除公司介绍/侧栏类容器；按 JD 段落标记（职位描述/岗位职责/任职要求…）计分，公司话术（成立于/是一家…）扣分；
-  // 同分取文本更小的（更贴近正文而非整页）。文本量下限放宽到 150 字，避免过短 JD 被漏。
+  // JD 正文后常见“非正文”区块标记：正文在此截断（保证不混入公司介绍/招聘者卡）
+  const JD_TAIL_CUT_MARKERS = ["竞争力分析", "BOSS 安全提示", "安全提示", "在招职位", "公司介绍", "公司简介", "更多职位"];
   const JD_AREA_SPECIFIC = [
     /job-sec/, /job-desc/, /jobDesc/, /jobDetail/, /job-detail/, /job-intro/, /jd-detail/, /description-text/, /desc-info/,
   ];
@@ -416,10 +419,10 @@
     "使命", "愿景", "在招职位", "热招", "了解更多",
   ];
   function containerScore(text) {
-    let score = 0;
-    for (const hint of JD_SECTION_HINTS) if (text.includes(hint)) score += 2;
-    for (const signal of JD_COMPANY_SIGNALS) if (text.includes(signal)) score -= 3;
-    return score;
+    // 加权：JD 段落命中（强）+ 文本量（中）− 公司/侧栏话术命中（强罚）
+    const hintCount = JD_SECTION_HINTS.filter((hint) => text.includes(hint)).length;
+    const signalCount = JD_COMPANY_SIGNALS.filter((signal) => text.includes(signal)).length;
+    return hintCount * 1000 - signalCount * 1500 + Math.min(text.length, 2500);
   }
   function isCompanySideContainer(node) {
     const c = clsOf(node);
@@ -447,20 +450,17 @@
     }
   }
   function longestKeywordArea(keywords) {
-    const candidates = [];
+    let best = { el: null, len: 0, text: "", score: -Infinity };
     for (const el of document.querySelectorAll("div,section,article")) {
       const c = clsOf(el);
       if (!keywords.some((keyword) => c.includes(keyword))) continue;
       if (isCompanySideContainer(el)) continue;
       const text = visibleText(el);
-      if (text.length < 150) continue;
-      candidates.push({ el, len: text.length, text, score: containerScore(text) });
+      if (text.length < 120) continue;
+      const score = containerScore(text);
+      if (score > best.score) best = { el, len: text.length, text, score };
     }
-    const scored = candidates.filter((candidate) => candidate.score > 0);
-    const pool = scored.length ? scored : candidates;
-    if (!pool.length) return { el: null, len: 0, text: "" };
-    pool.sort((a, b) => (b.score - a.score) || (b.len - a.len));
-    return pool[0];
+    return best;
   }
 
   function longestKeywordText(keywords) {
